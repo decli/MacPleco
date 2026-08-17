@@ -1,12 +1,12 @@
 name: Release
 
-# Cutting a release means editing the VERSION file. The tag is created by the
-# workflow rather than pushed by hand, which keeps the published artifacts and
-# the tag guaranteed to come from the same commit.
+# Cutting a release means either bumping VERSION or putting [release] in the
+# commit message. The tag is created by the workflow rather than pushed by
+# hand, which keeps the published artifacts and the tag guaranteed to come from
+# the same commit.
 on:
   push:
-    paths:
-      - "VERSION"
+    branches: ["**"]
   workflow_dispatch:
     inputs:
       version:
@@ -23,6 +23,10 @@ concurrency:
 jobs:
   release:
     name: Build and publish
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[release]') ||
+      contains(github.event.head_commit.modified, 'VERSION')
     runs-on: macos-26
     timeout-minutes: 45
     steps:
