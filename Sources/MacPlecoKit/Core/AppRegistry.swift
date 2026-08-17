@@ -31,7 +31,9 @@ public final class AppRegistry {
 
     public init() {}
 
-    private static var searchRoots: [(path: String, isSystem: Bool)] {
+    // Read by `discover()` on a background task, so it must not inherit the
+    // class's main-actor isolation.
+    private nonisolated static var searchRoots: [(path: String, isSystem: Bool)] {
         [
             ("/Applications", false),
             ("/Applications/Utilities", false),
@@ -141,7 +143,7 @@ public final class AppRegistry {
     /// `com.google.Chrome` -> `Chrome`, `com.tencent.xinWeChat` -> `xinWeChat`.
     /// Crude, but it only runs for identifiers with no installed app behind
     /// them, where any readable label beats the raw string.
-    public static func prettifyBundleID(_ bundleID: String) -> String {
+    public nonisolated static func prettifyBundleID(_ bundleID: String) -> String {
         let parts = bundleID.split(separator: ".")
         guard let last = parts.last else { return bundleID }
         if last.count <= 2, parts.count >= 2 {
