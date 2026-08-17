@@ -1,0 +1,107 @@
+import SwiftUI
+import AppKit
+
+struct SettingsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.xl) {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                SectionLabel(t("语言", "Language"))
+                Picker("", selection: languageBinding) {
+                    ForEach(Lang.allCases) { lang in
+                        Text(lang.displayName).tag(lang)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 240)
+                Text(t("切换后立即生效。", "Takes effect straight away."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.inkTertiary)
+            }
+
+            Divider().overlay(Palette.hairline)
+
+            VStack(alignment: .leading, spacing: Space.sm) {
+                SectionLabel(t("权限", "Permissions"))
+                HStack(spacing: Space.md) {
+                    Image(systemName: model.permissions.hasFullDiskAccess ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                        .foregroundStyle(model.permissions.hasFullDiskAccess ? Palette.positive : Palette.caution)
+                    Text(
+                        model.permissions.hasFullDiskAccess
+                            ? t("已获得完全磁盘访问权限", "Full Disk Access granted")
+                            : t("尚未获得完全磁盘访问权限", "Full Disk Access not granted")
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button(t("打开设置", "Open Settings")) {
+                        model.permissions.openSettings()
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
+            }
+
+            Divider().overlay(Palette.hairline)
+
+            about
+
+            Spacer(minLength: 0)
+        }
+        .padding(Space.xxl)
+        .frame(width: 460, height: 420)
+        .background {
+            Palette.tankGradient.ignoresSafeArea()
+        }
+        .id(model.language)
+    }
+
+    private var languageBinding: Binding<Lang> {
+        Binding(
+            get: { model.language },
+            set: { model.switchLanguage(to: $0) }
+        )
+    }
+
+    private var about: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            SectionLabel(t("关于", "About"))
+            HStack(spacing: Space.md) {
+                Image(systemName: "fish.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Palette.aquaSweep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MacPleco \(appVersion)")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Palette.ink)
+                    Text(t("GPL-3.0 开源许可", "Licensed under GPL-3.0"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.inkTertiary)
+                }
+                Spacer()
+            }
+
+            Text(
+                t(
+                    "灵感来自 tw93 的命令行工具 Mole。如果你习惯用终端，推荐直接用它。",
+                    "Inspired by Mole, tw93's terminal-first toolkit. If you live in a terminal, use that instead."
+                )
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(Palette.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: Space.lg) {
+                Link(t("项目主页", "Project page"), destination: URL(string: "https://github.com/decli/MacPleco")!)
+                Link("Mole", destination: URL(string: "https://github.com/tw93/Mole")!)
+            }
+            .font(.system(size: 11))
+            .tint(Palette.flow)
+        }
+    }
+
+    private var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "dev"
+    }
+}

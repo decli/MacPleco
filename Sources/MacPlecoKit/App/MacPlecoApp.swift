@@ -20,6 +20,11 @@ public struct MacPlecoApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
+
+        Settings {
+            SettingsView()
+                .environment(model)
+        }
     }
 }
 
