@@ -154,4 +154,26 @@ public enum SafePath {
     public static func removable(_ urls: [URL]) -> [URL] {
         urls.filter(isRemovable)
     }
+
+    /// Application bundles sit outside `allowedRoots` on purpose — nothing in
+    /// the cleaning path should ever be able to reach `/Applications`. The
+    /// uninstaller opts in through this separate, narrower check.
+    public static func isRemovableAppBundle(_ url: URL) -> Bool {
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        let path = resolved.path
+
+        guard path.hasSuffix(".app") else { return false }
+
+        // System applications are managed by macOS and are not the user's to
+        // remove; attempting it fails noisily on a sealed volume anyway.
+        guard !path.hasPrefix("/System/") else { return false }
+
+        // Never offer to uninstall the running copy of MacPleco.
+        let ownBundle = Bundle.main.bundleURL.standardizedFileURL.resolvingSymlinksInPath().path
+        guard path != ownBundle else { return false }
+
+        let home = NSHomeDirectory()
+        let roots = ["/Applications", "\(home)/Applications"]
+        return roots.contains { path.hasPrefix($0 + "/") }
+    }
 }

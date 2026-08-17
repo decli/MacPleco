@@ -20,11 +20,16 @@ public enum Removal {
     /// wrong selection costs a trip to the Trash rather than a restore from
     /// backup.
     @MainActor
-    public static func trash(_ urls: [URL], sizes: [URL: Int64] = [:]) async -> Outcome {
+    public static func trash(
+        _ urls: [URL],
+        sizes: [URL: Int64] = [:],
+        allowAppBundles: Bool = false
+    ) async -> Outcome {
         var outcome = Outcome()
 
         let permitted = urls.filter { url in
             if SafePath.isRemovable(url) { return true }
+            if allowAppBundles, SafePath.isRemovableAppBundle(url) { return true }
             outcome.refused.append(url)
             return false
         }

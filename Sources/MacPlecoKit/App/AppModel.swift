@@ -73,6 +73,7 @@ public final class AppModel {
     public let tune = TuneModel()
     public let monitor = MonitorModel()
     public let storage = StorageModel()
+    public let permissions = PermissionsModel()
 
     public init() {}
 
@@ -84,5 +85,6 @@ public final class AppModel {
     /// Called once when the window appears.
     public func bootstrap() {
         storage.refresh()
+        permissions.refresh()
     }
 }
