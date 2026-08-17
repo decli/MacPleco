@@ -1,0 +1,68 @@
+#!/bin/bash
+# Builds MacPleco.app from the SwiftPM product.
+#
+# SwiftPM emits a bare executable, so the bundle is assembled by hand. That is
+# deliberate: it keeps the repository free of a generated .xcodeproj and makes
+# every file that ends up inside the app visible in this script.
+#
+#   ./scripts/build-app.sh [version]
+#
+# Result: dist/MacPleco.app
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+APP_NAME="MacPleco"
+VERSION="${1:-0.0.0-dev}"
+# CFBundleShortVersionString must be dot-separated digits only; strip any
+# leading "v" and any pre-release suffix.
+SHORT_VERSION="$(printf '%s' "$VERSION" | sed -E 's/^v//; s/[-+].*$//')"
+[ -n "$SHORT_VERSION" ] || SHORT_VERSION="0.0.0"
+
+DIST="dist"
+APP="$DIST/$APP_NAME.app"
+CONTENTS="$APP/Contents"
+
+echo "==> Building universal binary (arm64 + x86_64), release"
+swift build -c release --arch arm64 --arch x86_64
+
+BIN_DIR="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+BINARY="$BIN_DIR/$APP_NAME"
+
+if [ ! -f "$BINARY" ]; then
+	echo "!! Expected binary not found at $BINARY" >&2
+	echo "   Contents of $BIN_DIR:" >&2
+	ls -la "$BIN_DIR" >&2 || true
+	exit 1
+fi
+
+echo "==> Assembling $APP"
+rm -rf "$APP"
+mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
+
+cp "$BINARY" "$CONTENTS/MacOS/$APP_NAME"
+chmod +x "$CONTENTS/MacOS/$APP_NAME"
+
+sed -e "s/__SHORT_VERSION__/$SHORT_VERSION/g" \
+	-e "s/__BUILD_VERSION__/$SHORT_VERSION/g" \
+	Resources/Info.plist > "$CONTENTS/Info.plist"
+
+printf 'APPL????' > "$CONTENTS/PkgInfo"
+
+if [ -f "Resources/AppIcon.icns" ]; then
+	cp "Resources/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
+else
+	echo "   (no Resources/AppIcon.icns yet — bundling without an icon)"
+fi
+
+echo "==> Signing (ad-hoc)"
+# There is no Developer ID certificate in CI. An ad-hoc signature still gives
+# the bundle a stable code identity, which is what TCC keys Full Disk Access
+# against; users clear the quarantine flag once after installing.
+codesign --force --sign - --timestamp=none "$APP"
+codesign --verify --verbose=2 "$APP"
+
+echo "==> Architectures"
+lipo -info "$CONTENTS/MacOS/$APP_NAME"
+
+echo "==> Done: $APP"
