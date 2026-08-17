@@ -61,6 +61,10 @@ public final class AppModel {
     public var destination: Destination = .overview
     public var language: Lang = Localization.current
 
+    /// Shared across Clean and Apps: both need to know what is installed, and
+    /// scanning `/Applications` twice would be wasted work.
+    public let registry = AppRegistry()
+
     /// Feature models are created eagerly but scan lazily, so switching
     /// sections never discards in-flight work or computed results.
     public let clean = CleanModel()
