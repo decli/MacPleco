@@ -181,6 +181,66 @@ public struct SafetyChip: View {
     }
 }
 
+// MARK: - Checkbox
+
+/// A checkbox with a third, indeterminate state.
+///
+/// AppKit has one and SwiftUI does not, and the mixed state matters here: a
+/// category showing a dash tells you at a glance that you have made a choice
+/// inside it, which a plain on/off box cannot.
+public struct TriStateBox: View {
+    /// Named `Mark` rather than `State` so it cannot shadow SwiftUI's property
+    /// wrapper inside this type.
+    public enum Mark { case off, mixed, on }
+
+    private let state: Mark
+    private let tint: Color
+    private let enabled: Bool
+    private let action: () -> Void
+
+    public init(
+        state: Mark,
+        tint: Color = Palette.aqua,
+        enabled: Bool = true,
+        action: @escaping () -> Void
+    ) {
+        self.state = state
+        self.tint = tint
+        self.enabled = enabled
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(state == .off ? AnyShapeStyle(Color.clear) : AnyShapeStyle(tint.gradient))
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(
+                        state == .off ? Palette.inkFaint : Color.clear,
+                        lineWidth: 1.2
+                    )
+                if state == .on {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(.white)
+                } else if state == .mixed {
+                    RoundedRectangle(cornerRadius: 1, style: .continuous)
+                        .fill(Color.white)
+                        .frame(width: 8, height: 2)
+                }
+            }
+            .frame(width: 17, height: 17)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+        .animation(.snappy(duration: 0.18), value: state)
+        .accessibilityAddTraits(state == .on ? [.isSelected] : [])
+    }
+}
+
 // MARK: - Capacity bar
 
 /// A slim horizontal fill. Used in the sidebar footer and in list rows where a
