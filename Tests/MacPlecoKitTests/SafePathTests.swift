@@ -62,6 +62,39 @@ final class SafePathTests: XCTestCase {
         }
     }
 
+    /// Regression: protected locations were once matched by exact path only, so
+    /// listing `~/Library/Application Support/AddressBook` guarded the folder
+    /// while leaving the contacts database inside it removable. Protection has
+    /// to cover the subtree.
+    func testProtectingAFolderAlsoProtectsWhatIsInsideIt() {
+        for path in [
+            "\(home)/Library/Application Support/AddressBook/Contacts.abbdb",
+            "\(home)/Library/Application Support/MobileSync/Backup/0001/Info.plist",
+            "\(home)/Library/Application Support/iCloud/Accounts/account.plist",
+            "\(home)/Library/Mobile Documents/com~apple~CloudDocs/thesis.pdf",
+            "\(home)/Library/Keychains/login.keychain-db",
+            "\(home)/Library/Mail/V10/inbox.mbox",
+            "\(home)/.ssh/id_ed25519"
+        ] {
+            XCTAssertFalse(
+                SafePath.isRemovable(url(path)),
+                "sweep must not reach \(path)"
+            )
+            XCTAssertFalse(
+                SafePath.isUserDeletable(url(path)),
+                "even a hand-picked removal must not reach \(path)"
+            )
+        }
+    }
+
+    /// The counterpart: pinning a directory must not sterilise everything in
+    /// it, or the app would be unable to clear a single cache.
+    func testPinningAFolderLeavesItsContentsRemovable() {
+        XCTAssertTrue(SafePath.isRemovable(url("\(home)/Library/Caches/com.example.App")))
+        XCTAssertTrue(SafePath.isUserDeletable(url("\(home)/Documents/old-export.zip")))
+        XCTAssertTrue(SafePath.isUserDeletable(url("\(home)/Desktop/screenshot.png")))
+    }
+
     func testPathsOutsideEveryAllowedRootAreRefused() {
         for path in [
             "\(home)/Projects/important",

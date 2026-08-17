@@ -3,13 +3,18 @@ import Foundation
 /// The last line of defence before anything is removed.
 ///
 /// The scanner should never produce a dangerous path in the first place, but
-/// rules are data and data drifts. Every removal in the app goes through
-/// `isRemovable` regardless of how the path was obtained, so a mistake in a
-/// rule cannot become a mistake on disk.
+/// rules are data and data drifts. Every removal in the app goes through this
+/// file regardless of how the path was obtained, so a mistake in a rule cannot
+/// become a mistake on disk.
 ///
-/// The policy is allowlist-first: a path must sit underneath a known-disposable
-/// root, must not *be* one of those roots, and must not match a protected
-/// location. Anything the policy has no opinion about is refused.
+/// Three lists do the work, and the distinction between them matters:
+///
+/// - `allowedRoots` — removal is permitted *underneath* these.
+/// - `pinnedDirectories` — refused as exact matches, contents still removable.
+///   `~/Library/Caches` belongs here: we clear things inside it, never it.
+/// - `vaults` — refused along with everything beneath them, for every policy.
+///   `~/Library/Application Support/AddressBook` belongs here: listing only the
+///   folder would leave the contacts database inside it removable.
 public enum SafePath {
 
     /// Roots underneath which removal is permitted.
@@ -50,32 +55,62 @@ public enum SafePath {
             "\(home)/.rustup",
             "\(home)/.pyenv",
             "\(home)/.conda",
-            "\(home)/Downloads",
-            "\(home)/Library/Mobile Documents"
+            "\(home)/Downloads"
         ]
     }
 
-    /// Locations that must survive even though they sit inside an allowed root.
+    /// Refused along with everything inside them, under every policy.
     ///
-    /// `~/Library/Application Support` is the sharp edge here: it holds both
-    /// throwaway caches and irreplaceable user data, so the whole directory is
-    /// an allowed root while its data-bearing children are pinned shut.
-    public static var protectedPaths: Set<String> {
+    /// These hold data that cannot be regenerated and in several cases cannot
+    /// even be re-downloaded: keychains, mail, messages, photo libraries,
+    /// device backups, iCloud Drive, and credentials for other systems.
+    public static var vaults: [String] {
         let home = NSHomeDirectory()
-        var paths: Set<String> = [
-            "/",
+        return [
             "/System",
-            "/Library",
-            "/Applications",
             "/usr",
             "/bin",
             "/sbin",
             "/etc",
-            "/var",
-            "/private",
-            "/opt",
+            "\(home)/Library/Keychains",
+            "\(home)/Library/Mail",
+            "\(home)/Library/Messages",
+            "\(home)/Library/Photos",
+            "\(home)/Library/CloudStorage",
+            "\(home)/Library/Mobile Documents",
+            "\(home)/Library/Application Support/MobileSync",
+            "\(home)/Library/Application Support/AddressBook",
+            "\(home)/Library/Application Support/CallHistoryDB",
+            "\(home)/Library/Application Support/CallHistoryTransactions",
+            "\(home)/Library/Application Support/Knowledge",
+            "\(home)/Library/Application Support/com.apple.sharedfilelist",
+            "\(home)/Library/Application Support/Dock",
+            "\(home)/Library/Application Support/iCloud",
+            "\(home)/Library/Application Support/Ubiquity",
+            "\(home)/Library/Application Support/FileProvider",
+            "\(home)/.ssh",
+            "\(home)/.gnupg",
+            "\(home)/.aws",
+            "\(home)/.kube",
+            "\(home)/.config/gh"
+        ]
+    }
+
+    /// Refused as exact matches only — their contents may still be removable.
+    ///
+    /// Every allowed root is pinned: we clear things *inside* `~/Library/Caches`
+    /// and never the folder itself.
+    public static var pinnedDirectories: Set<String> {
+        let home = NSHomeDirectory()
+        var pinned: Set<String> = [
+            "/",
             "/Users",
             "/Volumes",
+            "/Applications",
+            "/Library",
+            "/opt",
+            "/var",
+            "/private",
             home,
             "\(home)/Library",
             "\(home)/Documents",
@@ -84,33 +119,17 @@ public enum SafePath {
             "\(home)/Music",
             "\(home)/Movies",
             "\(home)/Public",
-            "\(home)/Applications",
-            "\(home)/Library/Keychains",
-            "\(home)/Library/Mail",
-            "\(home)/Library/Messages",
-            "\(home)/Library/Photos",
-            "\(home)/Library/CloudStorage",
-            "\(home)/Library/Safari",
-            "\(home)/Library/Mobile Documents",
-            "\(home)/Library/Application Support/MobileSync",
-            "\(home)/Library/Application Support/AddressBook",
-            "\(home)/Library/Application Support/CallHistoryDB",
-            "\(home)/Library/Application Support/Knowledge",
-            "\(home)/Library/Application Support/com.apple.sharedfilelist",
-            "\(home)/Library/Application Support/Dock",
-            "\(home)/Library/Application Support/iCloud",
-            "\(home)/Library/Application Support/Ubiquity"
+            "\(home)/Applications"
         ]
-        // Every allowed root is also protected from being removed itself: we
-        // clear things *inside* ~/Library/Caches, never the folder.
         for root in allowedRoots {
-            paths.insert(root)
+            pinned.insert(root)
         }
-        return paths
+        return pinned
     }
 
-    /// Directory names that must never be removed wherever they appear, because
-    /// their contents cannot be regenerated.
+    /// Directory names that must never be removed wherever they appear.
+    /// Redundant with `vaults` for the common locations, and deliberately so —
+    /// these also catch the same data sitting somewhere unexpected.
     private static let forbiddenComponents: Set<String> = [
         "Keychains",
         "MobileSync",
@@ -119,35 +138,46 @@ public enum SafePath {
         "Mail Data"
     ]
 
-    /// Decides whether `url` may be deleted or trashed.
-    public static func isRemovable(_ url: URL) -> Bool {
+    private static func isInsideVault(_ path: String) -> Bool {
+        vaults.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    /// Shared checks: standardises the path and applies the rules that hold
+    /// under every policy.
+    private static func vet(_ url: URL) -> String? {
         // `standardized` collapses "." and ".." without touching the disk;
         // resolving symlinks as well stops a link inside an allowed root from
         // pointing the deletion at, say, ~/Documents.
         let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
-        let path = resolved.path
+        var path = resolved.path
 
-        guard path.hasPrefix("/") else { return false }
-        guard !path.hasSuffix("/") || path == "/" else {
-            return isRemovable(URL(fileURLWithPath: String(path.dropLast())))
+        guard path.hasPrefix("/") else { return nil }
+        while path.count > 1, path.hasSuffix("/") {
+            path.removeLast()
         }
 
-        if protectedPaths.contains(path) { return false }
+        if pinnedDirectories.contains(path) { return nil }
+        if isInsideVault(path) { return nil }
 
         let components = resolved.pathComponents.filter { $0 != "/" }
-        // "/a/b" is the shallowest thing worth considering; anything shallower
-        // is a system root by definition.
-        guard components.count >= 3 else { return false }
+        // "/a/b/c" is the shallowest thing worth considering; anything
+        // shallower is a system or home root by definition.
+        guard components.count >= 3 else { return nil }
 
         for component in components where forbiddenComponents.contains(component) {
-            return false
+            return nil
         }
+
+        return path
+    }
+
+    /// Decides whether `url` may be cleared by an automated sweep.
+    public static func isRemovable(_ url: URL) -> Bool {
+        guard let path = vet(url) else { return false }
 
         // Must live strictly underneath an allowed root.
         let roots = allowedRoots.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
-        return roots.contains { root in
-            path.hasPrefix(root + "/")
-        }
+        return roots.contains { path.hasPrefix($0 + "/") }
     }
 
     /// Filters a batch, dropping anything the policy refuses.
@@ -161,24 +191,17 @@ public enum SafePath {
     ///
     /// This is the policy for things the user has personally located and
     /// selected: anything of their own, anywhere under the home folder or an
-    /// external volume, minus the protected set. It is never used by an
-    /// automated sweep, only by an explicit right-click.
+    /// external volume, minus the vaults and the pinned directories. It is
+    /// never used by an automated sweep, only by an explicit right-click.
     public static func isUserDeletable(_ url: URL) -> Bool {
-        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
-        let path = resolved.path
-
-        if protectedPaths.contains(path) { return false }
-
-        let components = resolved.pathComponents.filter { $0 != "/" }
-        guard components.count >= 3 else { return false }
-
-        for component in components where forbiddenComponents.contains(component) {
-            return false
-        }
+        guard let path = vet(url) else { return false }
 
         let home = NSHomeDirectory()
         if path.hasPrefix(home + "/") { return true }
-        if path.hasPrefix("/Volumes/") { return components.count >= 3 }
+        if path.hasPrefix("/Volumes/") {
+            // /Volumes/<disk>/<something> — never the volume itself.
+            return path.split(separator: "/").count >= 3
+        }
         return false
     }
 
