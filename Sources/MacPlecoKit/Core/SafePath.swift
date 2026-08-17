@@ -155,6 +155,33 @@ public enum SafePath {
         urls.filter(isRemovable)
     }
 
+    /// The space map explores the whole home folder, so the narrow cleaning
+    /// allowlist would refuse almost everything a user finds there — including
+    /// the 40 GB of old video they went looking for.
+    ///
+    /// This is the policy for things the user has personally located and
+    /// selected: anything of their own, anywhere under the home folder or an
+    /// external volume, minus the protected set. It is never used by an
+    /// automated sweep, only by an explicit right-click.
+    public static func isUserDeletable(_ url: URL) -> Bool {
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        let path = resolved.path
+
+        if protectedPaths.contains(path) { return false }
+
+        let components = resolved.pathComponents.filter { $0 != "/" }
+        guard components.count >= 3 else { return false }
+
+        for component in components where forbiddenComponents.contains(component) {
+            return false
+        }
+
+        let home = NSHomeDirectory()
+        if path.hasPrefix(home + "/") { return true }
+        if path.hasPrefix("/Volumes/") { return components.count >= 3 }
+        return false
+    }
+
     /// Application bundles sit outside `allowedRoots` on purpose — nothing in
     /// the cleaning path should ever be able to reach `/Applications`. The
     /// uninstaller opts in through this separate, narrower check.

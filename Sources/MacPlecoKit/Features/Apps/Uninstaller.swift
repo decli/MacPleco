@@ -123,6 +123,6 @@ public enum Uninstaller {
             sizes[leftover.url] = leftover.size
         }
 
-        return await Removal.trash(urls, sizes: sizes, allowAppBundles: true)
+        return await Removal.trash(urls, sizes: sizes, policy: .uninstall)
     }
 }

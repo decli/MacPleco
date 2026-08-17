@@ -1,6 +1,32 @@
 import Foundation
 import AppKit
 
+/// Which safety guard applies to a removal.
+///
+/// The three callers have genuinely different reach, and encoding that as a
+/// policy rather than a set of flags keeps it impossible for the automated
+/// sweep to acquire the uninstaller's or the space map's privileges by
+/// accident.
+public enum RemovalPolicy: Sendable {
+    /// Automated cleaning. The narrow cache allowlist, and nothing else.
+    case sweep
+    /// The uninstaller, which additionally reaches application bundles.
+    case uninstall
+    /// A path the user located and picked by hand in the space map.
+    case userSelected
+
+    public func permits(_ url: URL) -> Bool {
+        switch self {
+        case .sweep:
+            return SafePath.isRemovable(url)
+        case .uninstall:
+            return SafePath.isRemovable(url) || SafePath.isRemovableAppBundle(url)
+        case .userSelected:
+            return SafePath.isUserDeletable(url)
+        }
+    }
+}
+
 /// Removal, and the record of what was removed.
 public enum Removal {
 
@@ -23,13 +49,12 @@ public enum Removal {
     public static func trash(
         _ urls: [URL],
         sizes: [URL: Int64] = [:],
-        allowAppBundles: Bool = false
+        policy: RemovalPolicy = .sweep
     ) async -> Outcome {
         var outcome = Outcome()
 
         let permitted = urls.filter { url in
-            if SafePath.isRemovable(url) { return true }
-            if allowAppBundles, SafePath.isRemovableAppBundle(url) { return true }
+            if policy.permits(url) { return true }
             outcome.refused.append(url)
             return false
         }
