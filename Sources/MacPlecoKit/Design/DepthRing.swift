@@ -157,14 +157,14 @@ public struct DepthRing: View {
             // Full track, visible in both appearances.
             Circle()
                 .inset(by: 6)
-                .stroke(Palette.veil(0.10, light: 0.08), style: StrokeStyle(lineWidth: ringWidth))
+                .stroke(Color.veil(0.10, light: 0.08), style: StrokeStyle(lineWidth: ringWidth))
 
             // Used share of the disk.
             Circle()
                 .inset(by: 6)
                 .trim(from: 0, to: usedFraction)
                 .stroke(
-                    Palette.veil(0.26, light: 0.22),
+                    Color.veil(0.26, light: 0.22),
                     style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))

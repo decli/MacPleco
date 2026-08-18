@@ -58,8 +58,10 @@ Plus the launch agents that start with your Mac.
 在各处的偏好设置、沙盒容器和缓存，每一项都有体积，每一项都可以不删。另外还有开机启动项。
 
 **Space · 空间** — A squarified treemap of where the space actually went, one
-folder at a time. Right-click anything to reveal it or move it to the Trash.
-用矩阵树图看空间到底去哪了，一层一层下钻。右键可以在访达中显示，或移到废纸篓。
+folder at a time — sizes stream in as they're measured, colour depth tracks
+size. Plus a large-file radar: everything over 100 MB in your everyday folders.
+用矩阵树图看空间到底去哪了：测完一个显示一个，颜色越深占得越多。还有大文件雷达，
+把常用文件夹里超过 100 MB 的文件按大小排给你。
 
 **Tune-Up · 优化** — Eight repairs for specific symptoms: a broken Open With
 menu, blank preview thumbnails, tofu boxes instead of text, stale DNS, white
@@ -68,9 +70,15 @@ Finder. Nothing is pre-selected.
 八个针对具体毛病的小修小补：「打开方式」菜单错乱、预览图空白、字体显示成方块、DNS
 过期、图标变白纸、往共享盘里写 `.DS_Store`、窗口跑到屏幕外、访达卡死。默认一个都不选。
 
-**Monitor · 监控** — Live CPU, memory, network and the busiest processes.
-Sampling stops when you leave the section.
-实时 CPU、内存、网络和最占资源的进程。离开这个页面就停止采样。
+**Monitor · 监控** — Live CPU with per-core bars, memory in honest binary
+units, network, and the busiest processes with their real icons. Sampling stops
+when you leave the section.
+实时 CPU（含每核心负载条）、二进制单位的内存、网络、带真实图标的进程列表。
+离开这个页面就停止采样。
+
+**Menu bar · 菜单栏** — A small fish that answers "how full is my disk?" at a
+glance, with live vitals and one click into cleaning.
+菜单栏小鱼随时告诉你磁盘还剩多少，一键进入清理。
 
 ## Install · 安装
 

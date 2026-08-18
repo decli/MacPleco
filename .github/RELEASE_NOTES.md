@@ -1,73 +1,78 @@
-A native macOS app for reclaiming disk space, uninstalling apps cleanly, and
-seeing what your Mac is doing — built around Apple's Liquid Glass design
-language, and built for people who do not want to learn what `~/Library/Caches`
-means.
+MacPleco 0.2.0 — the redesign release. Every change below came out of running
+0.1.0 on a real Mac and treating what came back as a design review.
 
-一款原生 macOS 应用，用来回收磁盘空间、干净地卸载应用、查看系统状态。界面遵循 Apple
-的液态玻璃设计语言，做给不想搞懂 `~/Library/Caches` 是什么的人用。
+MacPleco 0.2.0 —— 重设计版本。以下所有改动都来自 0.1.0 在真机上的实测反馈。
 
-### What's in it · 有什么
+### The glass is real now · 玻璃真的显形了
 
-- **Overview** — the whole picture on one screen, and one button.
-- **Clean** — caches, logs, browsers, developer output, AI tools, cloud sync,
-  window state, uninstalled-app leftovers, old installers, Trash. Apps holding
-  a cache open are listed with the bytes they're sitting on.
-- **Apps** — sizes and last-opened dates; uninstall shows the full plan
-  (bundle + every leftover, each declinable) before anything moves. Plus
-  launch agents.
-- **Space** — a squarified treemap of where the space went.
-- **Tune-Up** — eight repairs for specific symptoms, none pre-selected.
-- **Monitor** — live CPU, memory, network, busiest processes.
+Liquid Glass is refraction — over a featureless background it looks like flat
+paper, which is exactly what 0.1.0's light mode was. The window now sits on
+slow-drifting ambient colour ("the tank"), so every panel visibly bends the
+light behind it, in both appearances. The drift freezes under Reduce Motion.
 
-Everything goes to the Trash by default. Permanent deletion is a separate
-switch that resets after every run. Chat caches, Xcode archives and anything an
-app is holding open are never pre-selected. No administrator password needed.
+液态玻璃靠折射显形，放在纯白背景上和白纸没有区别 —— 0.1.0 的浅色模式正是如此。
+现在整个窗口坐在一层缓慢漂移的环境色（"水族箱"）上，浅色深色下每块玻璃都能折射到
+背后的光。开启"减少动态效果"时完全静止。
 
-所有内容默认先进废纸篓；「跳过废纸篓」是单独开关且每次执行后复位。聊天软件缓存、
-Xcode 归档、正在被占用的目录一律不默认勾选。全程不需要管理员密码。
+### Interface · 界面
+
+- Hand-built sidebar: brand-coloured sliding selection pill, larger type,
+  ⌘1–6 section shortcuts. 自绘侧栏：品牌色滑动药丸、更大的字号、⌘1–6 快捷键。
+- Title bar is transparent instead of hidden — window dragging, double-click
+  zoom and full screen behave normally again. 标题栏改为透明而非隐藏，拖拽、双击
+  缩放、全屏行为全部回归。
+- Content sits in a centred column; big windows gain atmosphere, not blank
+  space. 内容居中收束，大窗口边缘是氛围而不是空白。
+- Cards rise in with staggered entrances and lift on hover; numbers tick.
+  卡片错峰入场、悬停微升、数字滚动。
+- Sections assemble with motion; the depth ring gained waves, bubbles and a
+  sonar sweep while scanning. 深度环有了波浪、气泡和扫描声呐。
+- Cleaning shows a bubbling veil while files travel, then a count-up success
+  card with a particle burst. 清理过程有气泡上升的遮罩，完成后数字滚动 + 粒子绽放。
+
+### Fixed from device testing · 真机实测修复
+
+- **RAM units**: a 128 GB machine was reported as "137 GB". Memory now uses
+  binary units like Activity Monitor; storage stays decimal like Finder.
+  **内存单位**：128 GB 的机器显示成 137 GB，已改为与活动监视器一致的二进制单位。
+- **Space page blank for ~10 s**: folder sizes now stream in as each finishes
+  (the biggest walk no longer gates the first paint), levels are cached per
+  session, and skeleton tiles shimmer while measuring.
+  **空间页 10 秒空白**：测完一个显示一个，会话内缓存已测层级，测量期间骨架屏占位。
+- The caution banner rendered as a solid amber slab (Glass.tint saturates
+  whole panels); tint is now a subtle wash. 橙色横幅色块问题已修复。
+- Clean categories no longer inherit the strictest item's colour — one
+  cautious item was painting whole categories amber. 分类不再因个别谨慎项整体变黄。
+- The font-cache repair icon rendered as CJK text (localised SF Symbol).
+  字体缓存图标显示成汉字的问题已修复。
+- Tune-Up's disabled Run button hid itself instead of sitting there pale.
+  优化页的灰色"执行"死按钮改为无选中时隐藏。
+- Space treemap colours now mean something: aqua depth tracks size rank,
+  loose files surface warm. 矩阵图颜色有了含义：越大越深，文件是暖色。
+
+### New · 新增
+
+- **Menu bar fish**: free space at a glance, live CPU/memory/thermal, one
+  click into cleaning. Toggle in Settings.
+  **菜单栏小鱼**：常驻显示剩余空间和实时状态，一键进入清理。可在设置中关闭。
+- **Large-file radar** in Space: everything over 100 MB in your everyday
+  folders, with age, reveal and trash. Hidden folders stay Clean's job.
+  **大文件雷达**：常用文件夹里超过 100 MB 的文件，带年龄标注，可显示或移到废纸篓。
+- **Cleaning ledger**: "MacPleco has freed 84 GB on this Mac" — cumulative,
+  persistent, resettable. **清理账本**：累计释放统计，可清零。
+- **Appearance override** (system / light / dark) and per-core CPU bars plus
+  real process icons in Monitor. **外观切换**与监控页每核心负载条、真实进程图标。
 
 ### Install · 安装
 
-1. Open the `.dmg` and drag **MacPleco** into **Applications**.
-2. MacPleco is open source and is not signed with a paid Apple Developer ID, so
-   macOS will say the developer cannot be verified. Open **System Settings →
-   Privacy & Security**, scroll to the bottom, click **Open Anyway**. Or run
-   once in Terminal:
-   ```
-   xattr -dr com.apple.quarantine /Applications/MacPleco.app
-   ```
-3. Grant **Full Disk Access** when asked — macOS keeps every app out of other
-   apps' cache folders, and nothing can be measured without it.
+Same as before: drag to Applications, right-click → Open on first launch (or
+`xattr -dr com.apple.quarantine /Applications/MacPleco.app`), grant Full Disk
+Access when asked. macOS 15+; Liquid Glass renders on macOS 26.
 
-打开 `.dmg` 把 MacPleco 拖进「应用程序」。首次打开时 macOS 会提示无法验证开发者，
-去「系统设置 → 隐私与安全性」滑到底部点「仍要打开」，或执行上面那行命令。然后按引导
-授予「完全磁盘访问权限」。
-
-Requires macOS 15 or later. Liquid Glass renders on macOS 26; earlier versions
-fall back to system materials. Universal binary (Apple silicon + Intel).
-
-需要 macOS 15 或更高版本。通用二进制，Apple 芯片和 Intel 都支持。
-
-### Please read before first use · 首次使用前请看
-
-This is the first public build. It compiles cleanly, ships as a signed
-universal binary, and its safety guard is covered by unit tests that run on
-every commit — but it has not yet been exercised interactively on a physical
-Mac. For a tool that deletes files, that is worth saying plainly.
-
-So for this release: **look at what is selected before you press the button**,
-and leave "Skip the Trash" off. Everything the app removes by default is
-recoverable from the Trash, which is exactly the safety net to keep while a
-release is this young.
-
-这是第一个公开版本。它编译干净、以签名的通用二进制发布、安全闸门有单元测试在每次提交时
-覆盖 —— 但还没有在真机上做过完整的交互测试。对一个会删文件的工具，这一点必须说清楚。
-
-所以这一版：**按按钮之前先看一眼选中了什么**，并且不要打开「跳过废纸篓」。默认删除的
-所有内容都能从废纸篓恢复，这个安全网在版本还这么新的时候值得留着。
-
-Bug reports very welcome: https://github.com/decli/MacPleco/issues
+安装方式不变：拖入应用程序，首次打开在「隐私与安全性」里点「仍要打开」，按引导授予
+完全磁盘访问权限。需要 macOS 15+，液态玻璃在 macOS 26 上呈现。
 
 ---
 
-Inspired by [Mole](https://github.com/tw93/Mole). GPL-3.0.
+Feedback → https://github.com/decli/MacPleco/issues · Inspired by
+[Mole](https://github.com/tw93/Mole) · GPL-3.0

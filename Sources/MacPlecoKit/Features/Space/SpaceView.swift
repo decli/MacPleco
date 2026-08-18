@@ -173,7 +173,7 @@ struct SpaceView: View {
             HStack(spacing: Space.sm) {
                 Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
                     .font(.system(size: 10))
-                    .foregroundStyle(tint(for: entry))
+                    .foregroundStyle(entry.isDirectory ? Palette.aqua : Palette.caution)
                 Text(entry.name)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Palette.ink)

@@ -82,37 +82,17 @@ struct Sidebar: View {
     }
 
     private func navRow(_ destination: Destination, shortcut: Int) -> some View {
-        let selected = model.destination == destination
-        return Button {
+        SidebarRow(
+            destination: destination,
+            selected: model.destination == destination,
+            namespace: pill,
+            shortcut: shortcut
+        ) {
             guard model.destination != destination else { return }
             withAnimation(.snappy(duration: 0.32, extraBounce: 0.08)) {
                 model.destination = destination
             }
-        } label: {
-            HStack(spacing: Space.md) {
-                Image(systemName: destination.symbol)
-                    .font(.system(size: 15, weight: selected ? .semibold : .medium))
-                    .frame(width: 22)
-                Text(destination.title)
-                    .font(.system(size: 14.5, weight: selected ? .semibold : .medium))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(selected ? Color.white : Palette.inkSecondary)
-            .padding(.horizontal, Space.md)
-            .padding(.vertical, 10)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                        .fill(Palette.aquaSweep)
-                        .shadow(color: Palette.aqua.opacity(0.35), radius: 8, y: 3)
-                        .matchedGeometryEffect(id: "nav-pill", in: pill)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
         }
-        .buttonStyle(SidebarRowStyle(selected: selected))
-        .keyboardShortcut(KeyEquivalent(Character("\(shortcut)")), modifiers: .command)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var capacityFooter: some View {
@@ -156,22 +136,50 @@ struct Sidebar: View {
     }
 }
 
-private struct SidebarRowStyle: ButtonStyle {
+/// One sidebar destination. A standalone view (not a ButtonStyle) because
+/// hover state inside a style struct is reconstructed every render and never
+/// actually updates.
+private struct SidebarRow: View {
+    let destination: Destination
     let selected: Bool
+    let namespace: Namespace.ID
+    let shortcut: Int
+    let action: () -> Void
+
     @State private var hovering = false
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.md) {
+                Image(systemName: destination.symbol)
+                    .font(.system(size: 15, weight: selected ? .semibold : .medium))
+                    .frame(width: 22)
+                Text(destination.title)
+                    .font(.system(size: 14.5, weight: selected ? .semibold : .medium))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(selected ? Color.white : Palette.inkSecondary)
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, 10)
             .background {
-                if !selected && hovering {
+                if selected {
+                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
+                        .fill(Palette.aquaSweep)
+                        .shadow(color: Palette.aqua.opacity(0.35), radius: 8, y: 3)
+                        .matchedGeometryEffect(id: "nav-pill", in: namespace)
+                } else if hovering {
                     RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                         .fill(Palette.wellFill)
                 }
             }
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .onHover { inside in
-                withAnimation(.smooth(duration: 0.16)) { hovering = inside }
-            }
+            .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            withAnimation(.smooth(duration: 0.16)) { hovering = inside }
+        }
+        .keyboardShortcut(KeyEquivalent(Character("\(shortcut)")), modifiers: .command)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 
