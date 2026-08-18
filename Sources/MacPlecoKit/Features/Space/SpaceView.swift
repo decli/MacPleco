@@ -13,7 +13,15 @@ struct SpaceView: View {
         @Bindable var space = model.space
 
         VStack(alignment: .leading, spacing: Space.lg) {
-            PageHeader(title: Destination.space.title, subtitle: Destination.space.subtitle) {
+            switch space.tab {
+            case .map: mapMode
+            case .large: largeMode
+            }
+        }
+        .navigationTitle(Destination.space.title)
+        .navigationSubtitle(Destination.space.subtitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
                 Picker("", selection: $space.tab) {
                     ForEach(SpaceModel.Tab.allCases) { tab in
                         Text(tab.title).tag(tab)
@@ -21,14 +29,6 @@ struct SpaceView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 210)
-            }
-            .padding(.horizontal, Space.xxl + Space.sm)
-            .padding(.top, Space.xxl + Space.md)
-
-            switch space.tab {
-            case .map: mapMode
-            case .large: largeMode
             }
         }
         .task { await space.start() }
@@ -72,7 +72,8 @@ struct SpaceView: View {
             }
             hint
         }
-        .padding(.horizontal, Space.xxl + Space.sm)
+        .padding(.horizontal, Space.xxl)
+        .padding(.top, Space.lg)
         .padding(.bottom, Space.xl)
     }
 
@@ -405,9 +406,10 @@ struct SpaceView: View {
                     }
                 }
             }
-            .padding(.horizontal, Space.xxl + Space.sm)
+            .padding(.horizontal, Space.xxl)
+            .padding(.top, Space.lg)
             .padding(.bottom, Space.xxl)
-            .frame(maxWidth: 1140 + 2 * (Space.xxl + Space.sm))
+            .frame(maxWidth: 1140 + 2 * Space.xxl)
             .frame(maxWidth: .infinity)
         }
         .softScrollEdges()

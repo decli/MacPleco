@@ -13,10 +13,9 @@ public struct MacPlecoApp: App {
             RootView()
                 .environment(model)
         }
-        // The title bar is made transparent by AppDelegate rather than removed
-        // by `.hiddenTitleBar`: a real (invisible) title bar keeps the system's
-        // drag region, double-click zoom and full-screen behaviour, all of
-        // which the hidden style silently discards.
+        // Standard window chrome, on purpose. With NavigationSplitView the
+        // title bar unifies with the glass toolbar, and dragging, double-click
+        // zoom and full screen are the system's own behaviour.
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1200, height: 800)
         .commands {
@@ -50,32 +49,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
-
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeMainNotification,
-            object: nil,
-            queue: .main
-        ) { note in
-            // The observer runs on the main queue but is not statically
-            // isolated; hop explicitly before touching AppKit.
-            let window = note.object as? NSWindow
-            Task { @MainActor in
-                if let window { Self.adoptChrome(window) }
-            }
-        }
-        for window in NSApplication.shared.windows {
-            Self.adoptChrome(window)
-        }
-    }
-
-    /// Content extends under a transparent title bar. The bar itself stays, so
-    /// dragging, double-click zoom and the green button all behave normally.
-    static func adoptChrome(_ window: NSWindow) {
-        guard window.styleMask.contains(.titled), !(window is NSPanel) else { return }
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.styleMask.insert(.fullSizeContentView)
-        window.isMovableByWindowBackground = false
     }
 
     /// Brings the existing main window forward, or asks SwiftUI for a new one.

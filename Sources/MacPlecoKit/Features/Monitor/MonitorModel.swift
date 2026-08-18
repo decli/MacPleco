@@ -28,10 +28,13 @@ public final class MonitorModel {
 
     public init() {}
 
-    /// Sampling only runs while the Monitor section is on screen. A cleaner
-    /// that quietly burns CPU polling counters in the background would be
-    /// undermining its own point.
+    /// Sampling only runs while something is watching — the Monitor section or
+    /// the menu bar panel. Reference-counted, because both can be open at once
+    /// and closing the panel must not freeze the page's charts.
+    private var watchers = 0
+
     public func start() {
+        watchers += 1
         guard loop == nil else { return }
         isStreaming = true
         loop = Task { [weak self] in
@@ -43,6 +46,8 @@ public final class MonitorModel {
     }
 
     public func stop() {
+        watchers = max(0, watchers - 1)
+        guard watchers == 0 else { return }
         loop?.cancel()
         loop = nil
         isStreaming = false

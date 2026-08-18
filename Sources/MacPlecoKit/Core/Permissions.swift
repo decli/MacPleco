@@ -15,8 +15,15 @@ public final class PermissionsModel {
 
     public init() {}
 
+    /// The probe opens a file the sandbox may block; do that off the main
+    /// thread and land the answer back here.
     public func refresh() {
-        hasFullDiskAccess = Self.probe()
+        Task.detached(priority: .userInitiated) {
+            let granted = Self.probe()
+            await MainActor.run { [weak self] in
+                self?.hasFullDiskAccess = granted
+            }
+        }
     }
 
     nonisolated static func probe() -> Bool {

@@ -3,96 +3,98 @@ import SwiftUI
 /// The water the whole interface lives in.
 ///
 /// Liquid Glass is refraction: a glass panel over a featureless background is
-/// indistinguishable from a flat one, which is exactly what the first build
-/// looked like in light appearance. This view exists to give the glass
-/// something to bend — a base gradient with four large, slow, blurred colour
-/// fields drifting behind everything.
+/// indistinguishable from a flat one. This layer gives the glass something to
+/// bend — a base gradient with four soft colour fields drifting behind the
+/// content.
 ///
-/// Restraint rules: the drift cycle is over a minute long, amplitude is small,
-/// the whole layer freezes under Reduce Motion, and it renders at 12 fps —
-/// blur hides the stepping and the energy cost stays negligible.
+/// Implementation note, learned the hard way: the first version drew the
+/// fields in a `Canvas` inside a `TimelineView`, blurred them by 90pt and
+/// wrapped everything in `drawingGroup()`. That combination re-rasterises the
+/// whole window on the main thread twelve times a second and froze the app on
+/// launch. A `RadialGradient` *is* a soft blob — no blur pass, no timeline, no
+/// offscreen rasterisation — and its drift is a plain repeat-forever offset
+/// animation the compositor runs off the main thread for free.
 public struct AmbientBackground: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var drifting = false
 
-    /// Set while a scan or clean is running; the water moves a little more.
-    var energetic: Bool = false
-
-    public init(energetic: Bool = false) {
-        self.energetic = energetic
-    }
+    public init() {}
 
     public var body: some View {
         ZStack {
             Palette.tankGradient
 
-            TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: reduceMotion)) { timeline in
-                let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
-                Canvas { context, size in
-                    let minSide = min(size.width, size.height)
-                    let drift = energetic ? 1.6 : 1.0
-
-                    blob(
-                        &context,
-                        color: Palette.auroraAqua,
-                        center: orbit(t, size, cx: 0.22, cy: 0.24, rx: 0.06, ry: 0.05, period: 67, phase: 0),
-                        radius: minSide * 0.52 * breathe(t, period: 41, phase: 1.2, amount: 0.06 * drift)
-                    )
-                    blob(
-                        &context,
-                        color: Palette.auroraSky,
-                        center: orbit(t, size, cx: 0.82, cy: 0.30, rx: 0.05, ry: 0.07, period: 83, phase: 2.1),
-                        radius: minSide * 0.46 * breathe(t, period: 53, phase: 0.4, amount: 0.05 * drift)
-                    )
-                    blob(
-                        &context,
-                        color: Palette.auroraViolet,
-                        center: orbit(t, size, cx: 0.68, cy: 0.85, rx: 0.07, ry: 0.05, period: 71, phase: 4.0),
-                        radius: minSide * 0.44 * breathe(t, period: 47, phase: 2.6, amount: 0.05 * drift)
-                    )
-                    blob(
-                        &context,
-                        color: Palette.auroraWarm,
-                        center: orbit(t, size, cx: 0.16, cy: 0.88, rx: 0.05, ry: 0.06, period: 89, phase: 5.3),
-                        radius: minSide * 0.36 * breathe(t, period: 59, phase: 3.8, amount: 0.04 * drift)
-                    )
+            GeometryReader { geo in
+                let side = min(geo.size.width, geo.size.height)
+                ZStack {
+                    blob(Palette.auroraAqua, diameter: side * 1.30, period: 47) {
+                        CGPoint(x: geo.size.width * 0.20, y: geo.size.height * 0.22)
+                    } sway: {
+                        CGSize(width: 46, height: 30)
+                    }
+                    blob(Palette.auroraSky, diameter: side * 1.15, period: 59) {
+                        CGPoint(x: geo.size.width * 0.84, y: geo.size.height * 0.28)
+                    } sway: {
+                        CGSize(width: -38, height: 44)
+                    }
+                    blob(Palette.auroraViolet, diameter: side * 1.10, period: 53) {
+                        CGPoint(x: geo.size.width * 0.68, y: geo.size.height * 0.86)
+                    } sway: {
+                        CGSize(width: 40, height: -34)
+                    }
+                    blob(Palette.auroraWarm, diameter: side * 0.90, period: 67) {
+                        CGPoint(x: geo.size.width * 0.14, y: geo.size.height * 0.88)
+                    } sway: {
+                        CGSize(width: -30, height: -26)
+                    }
                 }
-                .blur(radius: 90)
             }
 
-            // A faint vertical veil keeps the top of the window quietest, so
-            // titles and toolbars always sit on calm water.
+            // A faint veil keeps the top of the window quietest, so titles and
+            // toolbars always sit on calm water.
             LinearGradient(
                 colors: [Palette.shallow.opacity(0.55), .clear, .clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
         }
-        .drawingGroup()
         .ignoresSafeArea()
         .accessibilityHidden(true)
+        .onAppear {
+            guard !reduceMotion else { return }
+            drifting = true
+        }
     }
 
-    private func orbit(
-        _ t: Double, _ size: CGSize,
-        cx: Double, cy: Double, rx: Double, ry: Double,
-        period: Double, phase: Double
-    ) -> CGPoint {
-        let angle = (t / period) * 2 * .pi + phase
-        return CGPoint(
-            x: size.width * (cx + rx * cos(angle)),
-            y: size.height * (cy + ry * sin(angle * 0.9))
-        )
-    }
-
-    private func breathe(_ t: Double, period: Double, phase: Double, amount: Double) -> Double {
-        1.0 + amount * sin((t / period) * 2 * .pi + phase)
-    }
-
-    private func blob(_ context: inout GraphicsContext, color: Color, center: CGPoint, radius: Double) {
-        let rect = CGRect(
-            x: center.x - radius, y: center.y - radius,
-            width: radius * 2, height: radius * 2
-        )
-        context.fill(Path(ellipseIn: rect), with: .color(color))
+    private func blob(
+        _ color: Color,
+        diameter: CGFloat,
+        period: Double,
+        at position: () -> CGPoint,
+        sway: () -> CGSize
+    ) -> some View {
+        let home = position()
+        let amount = sway()
+        return Circle()
+            .fill(
+                RadialGradient(
+                    colors: [color, color.opacity(0)],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: diameter / 2
+                )
+            )
+            .frame(width: diameter, height: diameter)
+            .position(home)
+            .offset(
+                x: drifting ? amount.width : -amount.width,
+                y: drifting ? amount.height : -amount.height
+            )
+            .animation(
+                reduceMotion
+                    ? nil
+                    : .easeInOut(duration: period).repeatForever(autoreverses: true),
+                value: drifting
+            )
     }
 }

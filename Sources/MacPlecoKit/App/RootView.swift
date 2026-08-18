@@ -1,19 +1,35 @@
 import SwiftUI
 import AppKit
 
+/// The shell is deliberately the SYSTEM shell.
+///
+/// v0.2 hand-built the sidebar and hid the title bar to control every pixel —
+/// and immediately stopped looking like a Mac app, because on macOS 26 the
+/// unmistakable Liquid Glass chrome (the floating sidebar, the toolbar pills)
+/// belongs to the system containers. `NavigationSplitView` plus real
+/// `.toolbar` items get that glass drawn by the OS itself; our own
+/// `glassEffect` work is reserved for content cards, where custom elements
+/// are legitimate.
 public struct RootView: View {
     @Environment(AppModel.self) private var model
+    @State private var columns = NavigationSplitViewVisibility.all
 
     public init() {}
 
     public var body: some View {
-        HStack(spacing: 0) {
-            Sidebar()
+        NavigationSplitView(columnVisibility: $columns) {
+            SidebarColumn()
+                .navigationSplitViewColumnWidth(min: 224, ideal: 244, max: 300)
+        } detail: {
             DetailHost()
+                .background {
+                    AmbientBackground()
+                        // The API's actual purpose: let the detail's backdrop
+                        // continue under the glass sidebar and toolbar.
+                        .bleedUnderChrome()
+                }
         }
-        .background {
-            AmbientBackground(energetic: model.clean.isScanning || model.clean.isCleaning)
-        }
+        .navigationSplitViewStyle(.balanced)
         .tint(Palette.aqua)
         .frame(minWidth: 980, minHeight: 660)
         .task { model.bootstrap() }
@@ -26,41 +42,40 @@ public struct RootView: View {
 
 // MARK: - Sidebar
 
-/// Hand-built navigation instead of `List(selection:)`.
-///
-/// The system list paints its selection with the user's accent colour — a blue
-/// pill in a teal app, as the first build demonstrated — and its typography
-/// runs small. Building the rows by hand buys the brand-coloured sliding pill,
-/// larger type, hover states, and ⌘1–6 shortcuts.
-struct Sidebar: View {
+/// Rows live inside a real sidebar `List`, so the column keeps the system's
+/// Liquid Glass material. Selection is our own quiet aqua capsule — rendered
+/// per row, not by the List, so the user's system accent colour never fights
+/// the brand.
+struct SidebarColumn: View {
     @Environment(AppModel.self) private var model
-    @Namespace private var pill
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             brand
-            VStack(spacing: Space.xs) {
+            List {
                 ForEach(Array(Destination.allCases.enumerated()), id: \.element) { index, destination in
-                    navRow(destination, shortcut: index + 1)
+                    SidebarRow(
+                        destination: destination,
+                        selected: model.destination == destination,
+                        shortcut: index + 1
+                    ) {
+                        guard model.destination != destination else { return }
+                        withAnimation(.snappy(duration: 0.28)) {
+                            model.destination = destination
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
             }
-            .padding(.horizontal, Space.md)
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             Spacer(minLength: 0)
             capacityFooter
         }
-        .frame(width: 248)
-        .frame(maxHeight: .infinity)
-        .glassSurface(Rectangle())
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Palette.hairline)
-                .frame(width: 0.5)
-        }
-        .bleedUnderChrome()
     }
 
-    // The traffic lights float over this area (transparent title bar), so the
-    // wordmark starts below them.
     private var brand: some View {
         HStack(spacing: Space.sm + 2) {
             ZStack {
@@ -76,23 +91,9 @@ struct Sidebar: View {
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
         }
-        .padding(.top, 52)
+        .padding(.top, Space.md)
         .padding(.horizontal, Space.lg + Space.xs)
-        .padding(.bottom, Space.xl)
-    }
-
-    private func navRow(_ destination: Destination, shortcut: Int) -> some View {
-        SidebarRow(
-            destination: destination,
-            selected: model.destination == destination,
-            namespace: pill,
-            shortcut: shortcut
-        ) {
-            guard model.destination != destination else { return }
-            withAnimation(.snappy(duration: 0.32, extraBounce: 0.08)) {
-                model.destination = destination
-            }
-        }
+        .padding(.bottom, Space.sm)
     }
 
     private var capacityFooter: some View {
@@ -130,19 +131,18 @@ struct Sidebar: View {
             }
         }
         .padding(Space.md)
-        .glassPanel(radius: Radius.row)
+        .background {
+            RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
+                .fill(Palette.wellFill)
+        }
         .padding(.horizontal, Space.md)
         .padding(.bottom, Space.md)
     }
 }
 
-/// One sidebar destination. A standalone view (not a ButtonStyle) because
-/// hover state inside a style struct is reconstructed every render and never
-/// actually updates.
 private struct SidebarRow: View {
     let destination: Destination
     let selected: Bool
-    let namespace: Namespace.ID
     let shortcut: Int
     let action: () -> Void
 
@@ -160,13 +160,12 @@ private struct SidebarRow: View {
             }
             .foregroundStyle(selected ? Color.white : Palette.inkSecondary)
             .padding(.horizontal, Space.md)
-            .padding(.vertical, 10)
+            .padding(.vertical, 9)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                         .fill(Palette.aquaSweep)
-                        .shadow(color: Palette.aqua.opacity(0.35), radius: 8, y: 3)
-                        .matchedGeometryEffect(id: "nav-pill", in: namespace)
+                        .shadow(color: Palette.aqua.opacity(0.35), radius: 7, y: 2)
                 } else if hovering {
                     RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                         .fill(Palette.wellFill)
@@ -205,11 +204,10 @@ struct DetailHost: View {
 
 // MARK: - Page scaffold
 
-/// Standard page chrome: a header pinned above a scrolling body.
-///
-/// Content is constrained to a readable column and centred, so a huge window
-/// gains atmosphere at the edges instead of a smear of left-aligned cards and
-/// a sea of blank space to their right.
+/// Standard page chrome. The title and subtitle go through the REAL navigation
+/// bar (`navigationTitle`/`navigationSubtitle`), and page actions become real
+/// `.toolbar` items — on macOS 26 both render in the system's Liquid Glass,
+/// which no hand-rolled header can imitate.
 struct Page<Content: View>: View {
     let destination: Destination
     var trailing: AnyView? = nil
@@ -217,25 +215,23 @@ struct Page<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.lg) {
-            PageHeader(title: destination.title, subtitle: destination.subtitle) {
-                if let trailing { trailing }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                content()
             }
-            .padding(.horizontal, Space.xxl + Space.sm)
-            .padding(.top, Space.xxl + Space.md)
-            .frame(maxWidth: maxContentWidth + 2 * (Space.xxl + Space.sm))
+            .padding(.horizontal, Space.xxl)
+            .padding(.top, Space.lg)
+            .padding(.bottom, Space.xxl)
+            .frame(maxWidth: maxContentWidth + 2 * Space.xxl)
             .frame(maxWidth: .infinity)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.lg) {
-                    content()
-                }
-                .padding(.horizontal, Space.xxl + Space.sm)
-                .padding(.bottom, Space.xxl + Space.md)
-                .frame(maxWidth: maxContentWidth + 2 * (Space.xxl + Space.sm))
-                .frame(maxWidth: .infinity)
+        }
+        .softScrollEdges()
+        .navigationTitle(destination.title)
+        .navigationSubtitle(destination.subtitle)
+        .toolbar {
+            if let trailing {
+                ToolbarItem(placement: .primaryAction) { trailing }
             }
-            .softScrollEdges()
         }
         // Re-run entrance staggering when the section changes.
         .id(destination)
