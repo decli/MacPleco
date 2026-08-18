@@ -22,14 +22,24 @@ public final class StorageModel {
 
     public init() {}
 
+    /// The important-usage key is an XPC-backed purgeable-space query, not a
+    /// statfs read — it can take tens of milliseconds. Off the main thread,
+    /// same as the permissions probe, so opening the menu bar panel never
+    /// hitches on it.
     public func refresh() {
-        let url = URL(fileURLWithPath: NSHomeDirectory())
-        guard let values = try? url.resourceValues(forKeys: [
-            .volumeTotalCapacityKey,
-            .volumeAvailableCapacityForImportantUsageKey
-        ]) else { return }
+        Task.detached(priority: .userInitiated) {
+            let url = URL(fileURLWithPath: NSHomeDirectory())
+            guard let values = try? url.resourceValues(forKeys: [
+                .volumeTotalCapacityKey,
+                .volumeAvailableCapacityForImportantUsageKey
+            ]) else { return }
 
-        total = Int64(values.volumeTotalCapacity ?? 0)
-        available = values.volumeAvailableCapacityForImportantUsage ?? 0
+            let total = Int64(values.volumeTotalCapacity ?? 0)
+            let available = values.volumeAvailableCapacityForImportantUsage ?? 0
+            await MainActor.run { [weak self] in
+                self?.total = total
+                self?.available = available
+            }
+        }
     }
 }

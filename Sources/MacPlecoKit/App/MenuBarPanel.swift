@@ -21,12 +21,18 @@ struct MenuBarPanel: View {
         }
         .padding(Space.lg)
         .frame(width: 316)
-        .onAppear {
+        // Structural lifetime, not onAppear/onDisappear: appearance callbacks
+        // in a MenuBarExtra window panel have a history of firing unbalanced,
+        // and one missed onDisappear would leave the sampler (and its periodic
+        // /bin/ps subprocess) running forever. Task cancellation on teardown
+        // is guaranteed, so the stop always runs.
+        .task {
             model.storage.refresh()
             monitor.start()
-        }
-        .onDisappear {
-            monitor.stop()
+            defer { monitor.stop() }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+            }
         }
         .preferredColorScheme(model.appearance.scheme)
     }

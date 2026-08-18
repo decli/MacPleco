@@ -4,19 +4,19 @@ import SwiftUI
 ///
 /// Liquid Glass is refraction: a glass panel over a featureless background is
 /// indistinguishable from a flat one. This layer gives the glass something to
-/// bend — a base gradient with four soft colour fields drifting behind the
-/// content.
+/// bend — a base gradient with four soft colour fields behind the content.
 ///
-/// Implementation note, learned the hard way: the first version drew the
-/// fields in a `Canvas` inside a `TimelineView`, blurred them by 90pt and
-/// wrapped everything in `drawingGroup()`. That combination re-rasterises the
-/// whole window on the main thread twelve times a second and froze the app on
-/// launch. A `RadialGradient` *is* a soft blob — no blur pass, no timeline, no
-/// offscreen rasterisation — and its drift is a plain repeat-forever offset
-/// animation the compositor runs off the main thread for free.
+/// The fields are STATIC, and that is the third design of this layer, each
+/// cheaper than the last. v0.2 re-rasterised the window on the main thread
+/// twelve times a second (Canvas + 90pt blur + drawingGroup) and froze the
+/// app. The first fix drifted the fields with repeat-forever animations —
+/// which kept the compositor re-rendering every piece of glass chrome at
+/// display refresh, forever, for motion of 0.02pt per frame that no eye can
+/// see. A cleaner that burns GPU while idle is lying about its purpose, so
+/// the water now simply stands still: a RadialGradient *is* a soft light
+/// field, the glass refracts it just the same, and the window idles
+/// completely.
 public struct AmbientBackground: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drifting = false
 
     public init() {}
 
@@ -27,26 +27,26 @@ public struct AmbientBackground: View {
             GeometryReader { geo in
                 let side = min(geo.size.width, geo.size.height)
                 ZStack {
-                    blob(Palette.auroraAqua, diameter: side * 1.30, period: 47) {
-                        CGPoint(x: geo.size.width * 0.20, y: geo.size.height * 0.22)
-                    } sway: {
-                        CGSize(width: 46, height: 30)
-                    }
-                    blob(Palette.auroraSky, diameter: side * 1.15, period: 59) {
-                        CGPoint(x: geo.size.width * 0.84, y: geo.size.height * 0.28)
-                    } sway: {
-                        CGSize(width: -38, height: 44)
-                    }
-                    blob(Palette.auroraViolet, diameter: side * 1.10, period: 53) {
-                        CGPoint(x: geo.size.width * 0.68, y: geo.size.height * 0.86)
-                    } sway: {
-                        CGSize(width: 40, height: -34)
-                    }
-                    blob(Palette.auroraWarm, diameter: side * 0.90, period: 67) {
-                        CGPoint(x: geo.size.width * 0.14, y: geo.size.height * 0.88)
-                    } sway: {
-                        CGSize(width: -30, height: -26)
-                    }
+                    blob(
+                        Palette.auroraAqua,
+                        diameter: side * 1.30,
+                        at: CGPoint(x: geo.size.width * 0.20, y: geo.size.height * 0.22)
+                    )
+                    blob(
+                        Palette.auroraSky,
+                        diameter: side * 1.15,
+                        at: CGPoint(x: geo.size.width * 0.84, y: geo.size.height * 0.28)
+                    )
+                    blob(
+                        Palette.auroraViolet,
+                        diameter: side * 1.10,
+                        at: CGPoint(x: geo.size.width * 0.68, y: geo.size.height * 0.86)
+                    )
+                    blob(
+                        Palette.auroraWarm,
+                        diameter: side * 0.90,
+                        at: CGPoint(x: geo.size.width * 0.14, y: geo.size.height * 0.88)
+                    )
                 }
             }
 
@@ -60,22 +60,10 @@ public struct AmbientBackground: View {
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
-        .onAppear {
-            guard !reduceMotion else { return }
-            drifting = true
-        }
     }
 
-    private func blob(
-        _ color: Color,
-        diameter: CGFloat,
-        period: Double,
-        at position: () -> CGPoint,
-        sway: () -> CGSize
-    ) -> some View {
-        let home = position()
-        let amount = sway()
-        return Circle()
+    private func blob(_ color: Color, diameter: CGFloat, at position: CGPoint) -> some View {
+        Circle()
             .fill(
                 RadialGradient(
                     colors: [color, color.opacity(0)],
@@ -85,16 +73,6 @@ public struct AmbientBackground: View {
                 )
             )
             .frame(width: diameter, height: diameter)
-            .position(home)
-            .offset(
-                x: drifting ? amount.width : -amount.width,
-                y: drifting ? amount.height : -amount.height
-            )
-            .animation(
-                reduceMotion
-                    ? nil
-                    : .easeInOut(duration: period).repeatForever(autoreverses: true),
-                value: drifting
-            )
+            .position(position)
     }
 }

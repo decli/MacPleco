@@ -383,7 +383,10 @@ struct SpaceView: View {
 
     private var largeMode: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.md) {
+            // Lazy on purpose: up to 120 rows land in one update when the scan
+            // finishes, and building them all at once (each with a glass pane
+            // and an icon) stalled the main thread visibly.
+            LazyVStack(alignment: .leading, spacing: Space.md) {
                 largeHeader
                 if space.isScanningLarge && space.largeFiles.isEmpty {
                     ForEach(0..<6, id: \.self) { _ in
@@ -458,12 +461,32 @@ private struct LargeFileRow: View {
     let onTrash: () -> Void
 
     @State private var hovering = false
+    // The Launch Services icon lookup reads the disk; done in body it turns a
+    // page of rows into one long main-thread stall. Fetched async instead,
+    // with a quiet placeholder until it lands.
+    @State private var icon: NSImage?
 
     var body: some View {
         HStack(spacing: Space.md) {
-            Image(nsImage: IconCache.shared.icon(forPath: file.url.path))
-                .resizable()
-                .frame(width: 30, height: 30)
+            Group {
+                if let icon {
+                    Image(nsImage: icon)
+                        .resizable()
+                } else {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Palette.inkFaint)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .task(id: file.id) {
+                let path = file.url.path
+                icon = await Task.detached(priority: .utility) {
+                    let image = NSWorkspace.shared.icon(forFile: path)
+                    image.size = NSSize(width: 60, height: 60)
+                    return image
+                }.value
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name)

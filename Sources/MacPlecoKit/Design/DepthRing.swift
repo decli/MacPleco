@@ -50,7 +50,10 @@ public struct DepthRing: View {
     // MARK: - Water
 
     private var water: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+        // 30 fps only while work is happening; the resting swell is 2pt of
+        // amplitude and reads identically at 10 fps, so the landing page does
+        // not tick a canvas thirty times a second forever.
+        TimelineView(.animation(minimumInterval: isWorking ? 1.0 / 30.0 : 1.0 / 10.0, paused: reduceMotion)) { timeline in
             let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 let bounds = CGRect(origin: .zero, size: size).insetBy(dx: 17, dy: 17)

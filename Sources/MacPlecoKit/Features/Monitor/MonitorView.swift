@@ -12,11 +12,14 @@ struct MonitorView: View {
             processList.rises(1)
             footnote.rises(2)
         }
+        // Same structural pairing as the menu bar panel: the deferred stop is
+        // tied to task cancellation, which SwiftUI guarantees on teardown.
         .task {
             monitor.start()
-        }
-        .onDisappear {
-            monitor.stop()
+            defer { monitor.stop() }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+            }
         }
     }
 
