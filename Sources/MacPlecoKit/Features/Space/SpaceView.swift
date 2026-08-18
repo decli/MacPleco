@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SpaceView: View {
     @Environment(AppModel.self) private var model
@@ -64,17 +65,20 @@ struct SpaceView: View {
     // MARK: - Map mode
 
     private var mapMode: some View {
-        VStack(alignment: .leading, spacing: Space.lg) {
-            breadcrumb
-            HStack(alignment: .top, spacing: Space.lg) {
-                sidebar
-                map
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                breadcrumb
+                mapOverview
+                rankedEntries
+                hint
             }
-            hint
+            .padding(.horizontal, Space.xxl)
+            .padding(.top, Space.lg)
+            .padding(.bottom, Space.xxl)
+            .frame(maxWidth: 1240 + 2 * Space.xxl)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, Space.xxl)
-        .padding(.top, Space.lg)
-        .padding(.bottom, Space.xl)
+        .softScrollEdges()
     }
 
     private var breadcrumb: some View {
@@ -138,72 +142,69 @@ struct SpaceView: View {
         .glassPanel(radius: Radius.row)
     }
 
-    private var sidebar: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            SectionLabel(t("按大小排列", "By size"))
-                .padding(.horizontal, Space.sm)
-            ScrollView {
-                LazyVStack(spacing: 1) {
-                    if space.entries.isEmpty && space.isScanning {
-                        ForEach(0..<7, id: \.self) { _ in
-                            SkeletonBlock(radius: 6)
-                                .frame(height: 22)
-                                .padding(.horizontal, Space.sm)
-                                .padding(.vertical, 2)
-                        }
-                    }
-                    ForEach(space.entries.prefix(60)) { entry in
-                        listRow(entry)
-                    }
-                }
-            }
-        }
-        .frame(width: 232)
-        .padding(Space.md)
-        .glassPanel(radius: Radius.panel)
-    }
-
-    private func listRow(_ entry: SpaceEntry) -> some View {
-        Button {
-            if entry.isDirectory {
-                Task { await space.enter(entry) }
-            } else {
-                Removal.revealInFinder(entry.url)
-            }
-        } label: {
-            HStack(spacing: Space.sm) {
-                Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(entry.isDirectory ? Palette.aqua : Palette.caution)
-                Text(entry.name)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: Space.xs)
-                Text(Bytes.format(entry.size))
-                    .font(.system(size: 10.5, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.inkTertiary)
-            }
-            .padding(.horizontal, Space.sm)
-            .padding(.vertical, 5)
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(hovered == entry.id ? Palette.wellFill : Color.clear)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovered = $0 ? entry.id : (hovered == entry.id ? nil : hovered) }
-        .contextMenu { contextMenu(for: entry) }
-    }
-
     // MARK: - Treemap
+
+    private var mapOverview: some View {
+        GlassCard(padding: Space.md, radius: Radius.panel) {
+            VStack(alignment: .leading, spacing: Space.md) {
+                mapHeader
+                map
+            }
+        }
+    }
+
+    private var mapHeader: some View {
+        HStack(spacing: Space.lg) {
+            VStack(alignment: .leading, spacing: 3) {
+                SectionLabel(t("本层空间分布", "Storage at this level"))
+                Text(
+                    t(
+                        "面积代表占用空间 · 单击文件夹继续深入",
+                        "Area represents size · click a folder to drill down"
+                    )
+                )
+                .font(.system(size: 10.5))
+                .foregroundStyle(Palette.inkTertiary)
+            }
+
+            Spacer(minLength: Space.md)
+
+            if let item = hoveredMapItem {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(item.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                    Text("\(Bytes.format(item.size)) · \(mapShare(item.size))")
+                        .font(.system(size: 10.5, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.inkSecondary)
+                }
+                .transition(.opacity)
+            }
+
+            HStack(spacing: Space.md) {
+                mapLegend(color: Palette.aqua, label: t("文件夹", "Folders"))
+                mapLegend(color: Palette.caution, label: t("文件", "Files"))
+            }
+        }
+        .padding(.horizontal, Space.xs)
+    }
+
+    private func mapLegend(color: Color, label: String) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(color)
+                .frame(width: 9, height: 9)
+            Text(label)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(Palette.inkTertiary)
+        }
+    }
 
     private var map: some View {
         GeometryReader { geo in
-            let visible = Array(space.entries.prefix(40))
+            let visible = mapItems
             let rects = Treemap.layout(
                 values: visible.map(\.size),
                 in: CGRect(origin: .zero, size: geo.size)
@@ -217,19 +218,63 @@ struct SpaceView: View {
                         unreadableState
                     }
                 }
-                ForEach(Array(visible.enumerated()), id: \.element.id) { index, entry in
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
                     let rect = rects[index]
-                    if rect.width > 2, rect.height > 2 {
-                        tile(entry: entry, rect: rect, rank: index, of: visible.count)
+                    if rect.width > 4, rect.height > 4 {
+                        tile(item: item, rect: rect, rank: index, of: visible.count)
                             .transition(.scale(scale: 0.92).combined(with: .opacity))
                     }
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
+            // Tile offsets are coordinates in the map, so their parent must
+            // share the same top-leading origin. A centred frame shifts the
+            // entire treemap by half the leftover width — the source of the
+            // old blank left half and right-edge overflow.
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
             .animation(.smooth(duration: 0.45), value: space.entries)
         }
-        .frame(maxWidth: .infinity, minHeight: 430, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .frame(height: 500)
+        .background {
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .fill(Palette.wellFill)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(Palette.hairline, lineWidth: 0.75)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
+    }
+
+    /// The heavy items remain individually readable while the long tail is
+    /// consolidated into one tile. This keeps tiny, unclickable slivers from
+    /// taking over the map and also keeps their combined size honest.
+    private var mapItems: [DiskMapItem] {
+        let individualLimit = 31
+        var items = space.entries.prefix(individualLimit).map(DiskMapItem.init)
+        let remainder = space.entries.dropFirst(individualLimit).reduce(Int64(0)) { $0 + $1.size }
+        if remainder > 0 {
+            items.append(
+                DiskMapItem(
+                    id: "__other__:\(space.currentURL.path)",
+                    name: t("其他 \(space.entries.count - individualLimit) 项", "\(space.entries.count - individualLimit) other items"),
+                    size: remainder,
+                    entry: nil
+                )
+            )
+        }
+        return items
+    }
+
+    private var hoveredMapItem: DiskMapItem? {
+        guard let hovered else { return nil }
+        return mapItems.first { $0.id == hovered }
+    }
+
+    private func mapShare(_ size: Int64) -> String {
+        guard space.totalSize > 0 else { return "0%" }
+        return String(format: "%.1f%%", Double(size) / Double(space.totalSize) * 100)
     }
 
     private func skeletonMap(in size: CGSize) -> some View {
@@ -291,12 +336,13 @@ struct SpaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func tile(entry: SpaceEntry, rect: CGRect, rank: Int, of count: Int) -> some View {
-        let isHovered = hovered == entry.id
-        let showLabel = rect.width > 76 && rect.height > 42
+    private func tile(item: DiskMapItem, rect: CGRect, rank: Int, of count: Int) -> some View {
+        let isHovered = hovered == item.id
+        let showLabel = rect.width > 92 && rect.height > 50
+        let prominent = rect.width > 250 && rect.height > 125
 
         return RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(tileColor(entry: entry, rank: rank, of: count).gradient)
+            .fill(tileColor(item: item, rank: rank, of: count).gradient)
             .overlay {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .strokeBorder(
@@ -306,41 +352,52 @@ struct SpaceView: View {
             }
             .overlay(alignment: .topLeading) {
                 if showLabel {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.name)
-                            .font(.system(size: 11.5, weight: .semibold))
+                    VStack(alignment: .leading, spacing: prominent ? 6 : 3) {
+                        HStack(spacing: 6) {
+                            if prominent {
+                                Image(systemName: item.entry?.isDirectory == false ? "doc.fill" : "folder.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            Text(item.name)
+                        }
+                            .font(.system(size: prominent ? 17 : 12.5, weight: .semibold, design: .rounded))
                             .lineLimit(2)
-                        Text(Bytes.format(entry.size))
-                            .font(.system(size: 10.5, design: .rounded))
+                        Text("\(Bytes.format(item.size)) · \(mapShare(item.size))")
+                            .font(.system(size: prominent ? 12.5 : 10.5, weight: .medium, design: .rounded))
                             .monospacedDigit()
                             .opacity(0.85)
                     }
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-                    .padding(Space.sm)
+                    .padding(prominent ? Space.lg : Space.sm)
                 }
             }
-            .padding(1.5)
+            .padding(2.5)
             .frame(width: rect.width, height: rect.height)
             .offset(x: rect.minX, y: rect.minY)
             .scaleEffect(isHovered ? 1.012 : 1, anchor: .center)
             .animation(.smooth(duration: 0.2), value: isHovered)
-            .onHover { hovered = $0 ? entry.id : nil }
+            .onHover { hovered = $0 ? item.id : (hovered == item.id ? nil : hovered) }
             .onTapGesture {
-                if entry.isDirectory {
-                    Task { await space.enter(entry) }
-                } else {
-                    Removal.revealInFinder(entry.url)
+                if let entry = item.entry {
+                    if entry.isDirectory {
+                        Task { await space.enter(entry) }
+                    } else {
+                        Removal.revealInFinder(entry.url)
+                    }
                 }
             }
-            .contextMenu { contextMenu(for: entry) }
-            .help("\(entry.name) · \(Bytes.format(entry.size))")
+            .contextMenu {
+                if let entry = item.entry { contextMenu(for: entry) }
+            }
+            .help("\(item.name) · \(Bytes.format(item.size)) · \(mapShare(item.size))")
     }
 
     /// Colour carries meaning: depth of aqua tracks size rank — the biggest
     /// tiles are the deepest water — and loose files surface in warm tones so
     /// "one huge file" and "a folder of many things" never look alike.
-    private func tileColor(entry: SpaceEntry, rank: Int, of count: Int) -> Color {
+    private func tileColor(item: DiskMapItem, rank: Int, of count: Int) -> Color {
+        guard let entry = item.entry else { return Palette.inkFaint }
         if !entry.isDirectory {
             return rank < max(1, count / 3) ? Palette.danger : Palette.caution
         }
@@ -360,6 +417,9 @@ struct SpaceView: View {
         Button(t("在访达中显示", "Show in Finder")) {
             Removal.revealInFinder(entry.url)
         }
+        Button(t("复制完整路径", "Copy Full Path")) {
+            copyPath(entry.url)
+        }
         if space.canTrash(entry.url) {
             Divider()
             Button(t("移到废纸篓…", "Move to Trash…"), role: .destructive) {
@@ -377,6 +437,110 @@ struct SpaceView: View {
         )
         .font(.system(size: 11))
         .foregroundStyle(Palette.inkTertiary)
+    }
+
+    private func copyPath(_ url: URL) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
+    }
+
+    private var rankedEntries: some View {
+        VStack(alignment: .leading, spacing: Space.md) {
+            HStack {
+                SectionLabel(t("占用最多", "Largest items"))
+                Spacer()
+                Text(t("前 12 项 · 与地图联动", "Top 12 · linked to the map"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.inkTertiary)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 285), spacing: Space.md)],
+                spacing: Space.md
+            ) {
+                if space.entries.isEmpty && space.isScanning {
+                    ForEach(0..<6, id: \.self) { _ in
+                        SkeletonBlock(radius: Radius.card).frame(height: 76)
+                    }
+                } else {
+                    ForEach(Array(space.entries.prefix(12).enumerated()), id: \.element.id) { index, entry in
+                        rankedEntry(entry, rank: index + 1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func rankedEntry(_ entry: SpaceEntry, rank: Int) -> some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(spacing: Space.sm) {
+                Text("\(rank)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(Palette.inkTertiary)
+                    .frame(width: 20, height: 20)
+                    .background { Circle().fill(Palette.wellFill) }
+
+                Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(entry.isDirectory ? Palette.aqua : Palette.caution)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(verbatim: entry.url.path)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(Palette.inkTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(entry.url.path)
+                }
+
+                Spacer(minLength: Space.xs)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Bytes.format(entry.size))
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.ink)
+                    Text(mapShare(entry.size))
+                        .font(.system(size: 9.5, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.inkTertiary)
+                }
+
+                Button {
+                    Removal.revealInFinder(entry.url)
+                } label: {
+                    Image(systemName: "folder")
+                        .font(.system(size: 10.5, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(Palette.flow)
+                .help(t("在访达中显示", "Show in Finder"))
+            }
+
+            CapacityBar(
+                fraction: space.totalSize > 0 ? Double(entry.size) / Double(space.totalSize) : 0,
+                tint: entry.isDirectory ? Palette.aqua : Palette.caution,
+                height: 3
+            )
+        }
+        .padding(Space.md)
+        .glassPanel(radius: Radius.card)
+        .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .onTapGesture {
+            if entry.isDirectory {
+                Task { await space.enter(entry) }
+            } else {
+                Removal.revealInFinder(entry.url)
+            }
+        }
+        .onHover { hovered = $0 ? entry.id : (hovered == entry.id ? nil : hovered) }
+        .contextMenu { contextMenu(for: entry) }
     }
 
     // MARK: - Large files mode
@@ -431,8 +595,8 @@ struct SpaceView: View {
                             "Looking through your everyday folders… \(space.largeFilesScanned) files so far"
                           )
                         : t(
-                            "常用文件夹里超过 100 MB 的文件，按大小排列。隐藏目录和缓存归「清理」管，不在这里。",
-                            "Files over 100 MB in your everyday folders, largest first. Hidden folders and caches belong to Clean, not here."
+                            "常用文件夹里超过 100 MB 的文件，按大小排列。每项都显示完整路径，并可先在访达中确认。",
+                            "Files over 100 MB in everyday folders, largest first. Every row shows its full path and opens in Finder for verification."
                           )
                 )
                 .font(.system(size: 12))
@@ -494,6 +658,15 @@ private struct LargeFileRow: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                Text(verbatim: file.url.path)
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(Palette.inkTertiary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .help(file.url.path)
+
                 HStack(spacing: Space.sm) {
                     Text(file.folder)
                         .font(.system(size: 10.5))
@@ -509,36 +682,80 @@ private struct LargeFileRow: View {
 
             Spacer(minLength: Space.md)
 
-            if hovering {
-                Button {
-                    Removal.revealInFinder(file.url)
-                } label: {
-                    Image(systemName: "arrow.up.forward.app")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.flow)
-                }
-                .buttonStyle(.plain)
-                .help(t("在访达中显示", "Show in Finder"))
-
-                if canTrash {
-                    Button(t("移到废纸篓", "Trash"), action: onTrash)
-                        .buttonStyle(GhostButtonStyle(tint: Palette.danger))
-                }
-            }
-
             Text(Bytes.format(file.size))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.ink)
                 .frame(minWidth: 76, alignment: .trailing)
+
+            Button {
+                Removal.revealInFinder(file.url)
+            } label: {
+                Label(t("访达", "Finder"), systemImage: "folder")
+                    .font(.system(size: 10.5, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .tint(Palette.flow)
+            .help(t("在访达中显示", "Show in Finder"))
+            .accessibilityLabel(t("在访达中显示 \(file.name)", "Show \(file.name) in Finder"))
+
+            if hovering {
+                if canTrash {
+                    Button(t("移到废纸篓", "Trash"), action: onTrash)
+                        .buttonStyle(GhostButtonStyle(tint: Palette.danger))
+                }
+            }
         }
         .padding(Space.md)
         .glassPanel(radius: Radius.card)
         .onHover { hovering = $0 }
+        .contextMenu {
+            Button {
+                Removal.revealInFinder(file.url)
+            } label: {
+                Label(t("在访达中显示", "Show in Finder"), systemImage: "folder")
+            }
+            Button(action: copyFullPath) {
+                Label(t("复制完整路径", "Copy Full Path"), systemImage: "doc.on.doc")
+            }
+            if canTrash {
+                Divider()
+                Button(t("移到废纸篓…", "Move to Trash…"), role: .destructive, action: onTrash)
+            }
+        }
     }
 
     private var isStale: Bool {
         guard let modified = file.modified else { return false }
         return Date().timeIntervalSince(modified) > 365 * 86_400
+    }
+
+    private func copyFullPath() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(file.url.path, forType: .string)
+    }
+}
+
+// MARK: - Map item
+
+private struct DiskMapItem: Identifiable {
+    let id: String
+    let name: String
+    let size: Int64
+    let entry: SpaceEntry?
+
+    init(_ entry: SpaceEntry) {
+        id = entry.id
+        name = entry.name
+        size = entry.size
+        self.entry = entry
+    }
+
+    init(id: String, name: String, size: Int64, entry: SpaceEntry?) {
+        self.id = id
+        self.name = name
+        self.size = size
+        self.entry = entry
     }
 }

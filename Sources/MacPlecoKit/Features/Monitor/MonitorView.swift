@@ -110,11 +110,12 @@ struct MonitorView: View {
     // MARK: - Processes
 
     private var processList: some View {
-        GlassCard(padding: Space.lg) {
+        @Bindable var monitor = model.monitor
+
+        return GlassCard(padding: Space.lg) {
             VStack(alignment: .leading, spacing: Space.md) {
-                HStack {
+                HStack(spacing: Space.md) {
                     SectionLabel(t("最占资源的进程", "Busiest processes"))
-                    Spacer()
                     if monitor.isStreaming {
                         HStack(spacing: Space.xs) {
                             Circle()
@@ -125,6 +126,23 @@ struct MonitorView: View {
                                 .foregroundStyle(Palette.inkTertiary)
                         }
                     }
+
+                    Spacer()
+
+                    Picker(t("刷新排序", "Refresh order"), selection: $monitor.processOrder) {
+                        ForEach(ProcessOrderMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 190)
+                    .help(
+                        t(
+                            "实时排序会随数据改变行位置；固定位置只刷新数字，进程退出时才补位。",
+                            "Live order moves rows with the data; fixed positions refresh values and only fill gaps when a process exits."
+                        )
+                    )
                 }
 
                 if monitor.processes.isEmpty {
@@ -137,13 +155,72 @@ struct MonitorView: View {
                     .padding(.vertical, Space.md)
                 } else {
                     VStack(spacing: 0) {
+                        processHeader
+                        Divider().overlay(Palette.hairline)
                         ForEach(monitor.processes) { process in
                             processRow(process)
                         }
                     }
+                    .animation(
+                        monitor.processOrder == .live ? .smooth(duration: 0.42) : nil,
+                        value: monitor.processes.map(\.pid)
+                    )
+                }
+
+                if monitor.processSort == .gpu, !monitor.hasPerProcessGPU {
+                    Label {
+                        Text(
+                            t(
+                                "macOS 没有向普通 App 开放“其他进程实时 GPU %”接口，因此 GPU 暂显示为“—”。MacPleco 不会用 CPU/能耗冒充，也不会为此索要管理员权限。",
+                                "macOS does not expose other processes' live GPU % to ordinary apps, so GPU is shown as “—”. MacPleco won't substitute CPU/energy data or ask for administrator access."
+                            )
+                        )
+                    } icon: {
+                        Image(systemName: "info.circle")
+                    }
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.inkTertiary)
                 }
             }
         }
+    }
+
+    private var processHeader: some View {
+        HStack(spacing: Space.md) {
+            Color.clear.frame(width: 18, height: 1)
+
+            Text(t("进程", "Process"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("PID")
+                .frame(width: 58, alignment: .trailing)
+
+            processMetricHeader(.memory, width: 82)
+            processMetricHeader(.gpu, width: 72)
+            processMetricHeader(.cpu, width: 118)
+        }
+        .font(.system(size: 9.5, weight: .semibold))
+        .foregroundStyle(Palette.inkTertiary)
+        .padding(.bottom, Space.xs)
+    }
+
+    private func processMetricHeader(_ metric: ProcessSortMetric, width: CGFloat) -> some View {
+        Button {
+            monitor.processSort = metric
+        } label: {
+            HStack(spacing: 3) {
+                Text(metric.title)
+                if monitor.processSort == metric {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                }
+            }
+            .foregroundStyle(monitor.processSort == metric ? Palette.flow : Palette.inkTertiary)
+            .frame(width: width, alignment: .trailing)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(t("按 \(metric.title) 从高到低排序", "Sort by \(metric.title), highest first"))
     }
 
     private func processRow(_ process: ProcessSample) -> some View {
@@ -164,8 +241,20 @@ struct MonitorView: View {
             Text(Bytes.formatMemory(process.memory))
                 .font(.system(size: 11.5, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Palette.inkSecondary)
-                .frame(width: 78, alignment: .trailing)
+                .foregroundStyle(monitor.processSort == .memory ? Palette.ink : Palette.inkSecondary)
+                .contentTransition(.numericText())
+                .frame(width: 82, alignment: .trailing)
+
+            Text(process.gpu.map { String(format: "%.1f%%", $0) } ?? "—")
+                .font(.system(size: 11.5, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(
+                    process.gpu == nil
+                        ? Palette.inkFaint
+                        : (monitor.processSort == .gpu ? Palette.ink : Palette.inkSecondary)
+                )
+                .contentTransition(.numericText())
+                .frame(width: 72, alignment: .trailing)
 
             HStack(spacing: Space.sm) {
                 CapacityBar(
@@ -177,9 +266,11 @@ struct MonitorView: View {
                 Text(String(format: "%.1f%%", process.cpu))
                     .font(.system(size: 11.5, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Palette.ink)
+                    .foregroundStyle(monitor.processSort == .cpu ? Palette.ink : Palette.inkSecondary)
+                    .contentTransition(.numericText())
                     .frame(width: 50, alignment: .trailing)
             }
+            .frame(width: 118, alignment: .trailing)
         }
         .padding(.vertical, 6)
     }
@@ -327,15 +418,21 @@ private struct MetricCard<Extra: View>: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
 
-                if !history.isEmpty {
-                    Sparkline(values: history, tint: tint)
-                        .frame(height: 30)
+                Group {
+                    if !history.isEmpty {
+                        Sparkline(values: history, tint: tint)
+                    } else {
+                        Color.clear
+                    }
                 }
+                .frame(height: 30)
 
-                extra()
+                extra().frame(height: 22)
 
                 if let fraction {
                     CapacityBar(fraction: fraction, tint: tint, height: 4)
+                } else {
+                    Color.clear.frame(height: 4)
                 }
 
                 Text(detail)
@@ -343,6 +440,7 @@ private struct MetricCard<Extra: View>: View {
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 27, alignment: .topLeading)
             }
         }
     }

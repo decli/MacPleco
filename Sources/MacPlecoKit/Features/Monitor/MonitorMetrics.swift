@@ -19,7 +19,21 @@ public struct ProcessSample: Identifiable, Sendable, Hashable {
     public let pid: Int32
     public let name: String
     public let cpu: Double
+    /// Per-process GPU utilisation is deliberately optional. macOS exposes
+    /// live GPU counters for work submitted by *this* process through Metal,
+    /// but has no public, unprivileged API for inspecting every other process.
+    /// Keeping the value optional avoids turning energy or CPU time into a
+    /// made-up "GPU %" while leaving the table ready for a future public API.
+    public let gpu: Double?
     public let memory: Int64
+
+    public init(pid: Int32, name: String, cpu: Double, gpu: Double? = nil, memory: Int64) {
+        self.pid = pid
+        self.name = name
+        self.cpu = cpu
+        self.gpu = gpu
+        self.memory = memory
+    }
 }
 
 /// Live system counters.
@@ -201,12 +215,12 @@ public final class MetricsSampler {
 
     // MARK: - Processes
 
-    /// Top processes by CPU.
+    /// All visible processes with CPU and resident-memory counters.
     ///
     /// Reads `ps` rather than walking `proc_pidinfo`: it needs no entitlement,
     /// costs a few milliseconds, and reports exactly the numbers Activity
     /// Monitor shows, which is what a user will compare against.
-    public static func sampleProcesses(limit: Int = 12) -> [ProcessSample] {
+    public static func sampleProcesses(limit: Int? = nil) -> [ProcessSample] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
         process.arguments = ["-Aceo", "pid,pcpu,rss,comm", "-r"]
@@ -241,7 +255,7 @@ public final class MetricsSampler {
             results.append(
                 ProcessSample(pid: pid, name: name, cpu: cpu, memory: rss * 1024)
             )
-            if results.count >= limit { break }
+            if let limit, results.count >= limit { break }
         }
 
         return results
