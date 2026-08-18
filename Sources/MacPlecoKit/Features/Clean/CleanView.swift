@@ -335,25 +335,13 @@ private struct CategoryCard: View {
 
     private var itemList: some View {
         LazyVStack(spacing: 0) {
-            ForEach(category.items.prefix(80)) { item in
+            // Every item included in a cleanup must remain inspectable. The
+            // lazy stack creates rows as they approach the viewport, so there
+            // is no need to hide the tail of a large category for performance.
+            ForEach(category.items) { item in
                 ItemRow(item: item, registry: registry) {
                     onToggleItem(item.id)
                 }
-            }
-            if category.items.count > 80 {
-                HStack {
-                    Text(
-                        t(
-                            "另外 \(category.items.count - 80) 项较小的内容已一并计入",
-                            "\(category.items.count - 80) more smaller items are included in the total"
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.inkTertiary)
-                    Spacer()
-                }
-                .padding(.horizontal, Space.lg)
-                .padding(.vertical, Space.md)
             }
         }
         .padding(.bottom, Space.sm)
@@ -389,26 +377,32 @@ private struct ItemRow: View {
                         SafetyChip(item.safety, compact: true)
                     }
                 }
-                Text(subtitle)
-                    .font(.system(size: 10.5))
+                if let statusText {
+                    Text(statusText)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Palette.inkTertiary)
+                        .lineLimit(1)
+                }
+                Text(verbatim: item.path)
+                    .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(Palette.inkTertiary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .help(item.path)
             }
 
             Spacer(minLength: Space.sm)
 
-            if isHovering {
-                Button {
-                    Removal.revealInFinder(item.url)
-                } label: {
-                    Image(systemName: "arrow.up.forward.app")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Palette.flow)
-                }
-                .buttonStyle(.plain)
-                .help(t("在访达中显示", "Show in Finder"))
+            Button(action: revealInFinder) {
+                Label(t("访达", "Finder"), systemImage: "folder")
+                    .font(.system(size: 10.5, weight: .medium))
             }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .tint(Palette.flow)
+            .help(t("在访达中显示", "Show in Finder"))
+            .accessibilityLabel(t("在访达中显示 \(item.title)", "Show \(item.title) in Finder"))
 
             Text(Bytes.format(item.size))
                 .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -426,14 +420,31 @@ private struct ItemRow: View {
             }
         }
         .onHover { isHovering = $0 }
+        .contextMenu {
+            Button(action: revealInFinder) {
+                Label(t("在访达中显示", "Show in Finder"), systemImage: "folder")
+            }
+            Button(action: copyFullPath) {
+                Label(t("复制完整路径", "Copy Full Path"), systemImage: "doc.on.doc")
+            }
+        }
     }
 
-    private var subtitle: String {
+    private var statusText: String? {
         if let blockedBy = item.blockedBy {
             return t("\(blockedBy) 正在运行，退出后再清理", "\(blockedBy) is running — quit it first")
         }
         if let note = item.note { return note }
-        return item.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        return nil
+    }
+
+    private func revealInFinder() {
+        Removal.revealInFinder(item.url)
+    }
+
+    private func copyFullPath() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(item.path, forType: .string)
     }
 
     @ViewBuilder

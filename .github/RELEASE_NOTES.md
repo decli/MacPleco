@@ -1,56 +1,42 @@
-MacPleco 0.3.1 — the launch-freeze fix, verified.
+MacPleco 0.3.2 — inspect every cleanup target before it moves.
 
-MacPleco 0.3.1 —— 经实机验证的启动卡死修复。
+MacPleco 0.3.2 —— 每个清理目标都能先核对，再移动。
 
-### Fixed: Overview no longer beach-balls · 修复：首页不再卡死
+### Full paths for every item · 每一项都显示完整路径
 
-Version 0.3.0 removed an expensive animated background, but a second and more
-fundamental launch bug remained on macOS 26: binding
-`MenuBarExtra(isInserted:)` directly to `@AppStorage` could create a SwiftUI
-scene and main-menu invalidation loop. The main thread rebuilt the application
-menu continuously, pinning a CPU core while memory climbed until the window
-stopped responding.
+Every file or directory listed in Clean now shows its absolute path directly
+under its name. Status messages such as “the app is running” or “the app is no
+longer installed” remain visible between the title and path, so safety context
+is not lost. Long paths can use two lines, keep their identifying beginning and
+end visible, and expose the complete value in the pointer help.
 
-0.3.0 虽然移除了高开销的动态背景，但 macOS 26 上还藏着第二个、更根本的启动问题：
-把 `MenuBarExtra(isInserted:)` 直接绑定到 `@AppStorage`，可能触发 SwiftUI 场景与
-主菜单的无限失效循环。主线程会不停重建应用菜单，占满一个 CPU 核心，内存持续增长，
-最终让首页完全失去响应。
+清理页面里的每个文件或目录，现在都会在名称下方直接显示绝对路径。诸如“应用正在运行”
+或“应用已经卸载”的状态说明仍保留在名称与路径之间，不会因为显示路径而丢失风险信息。
+较长路径可以显示两行，并保留最有辨识度的开头与结尾；悬停时还能查看完整值。
 
-The menu-bar preference now lives in ordinary SwiftUI state. Persistence is
-performed only when that state changes, so the setting still survives relaunch
-without participating in scene invalidation. On macOS 26.5.2, the same launch
-that previously reached 100% CPU and more than 800 MB now settles at 0% CPU,
-about 82 MB, with the main thread asleep in the normal event loop.
+### Reveal in Finder, including right-click · 行内与右键均可在访达定位
 
-菜单栏开关现在由普通 SwiftUI 状态管理，只在状态改变时写入偏好设置。因此它仍能跨启动
-保存，却不会再参与场景失效循环。实测同一台 macOS 26.5.2：修复前 CPU 约 100%、内存
-超过 800 MB；修复后空闲 CPU 为 0%，内存约 82 MB，主线程正常休眠等待事件。
+- A compact, always-visible Finder button sits next to each item's size.
+- Right-clicking any row offers **Show in Finder** and **Copy Full Path**.
+- Files and directories use Finder's native reveal operation, which opens the
+  containing location and selects the exact cleanup target.
+- Buttons include localized help and accessibility labels.
 
-### Truly idle when idle · 静止时真正静止
+- 每项大小旁新增常驻的紧凑“访达”按钮。
+- 右键任意一行可选择“在访达中显示”或“复制完整路径”。
+- 文件与目录统一调用访达原生定位操作，打开所在位置并选中准确的清理目标。
+- 按钮包含中英文帮助文本与辅助功能标签。
 
-The Overview depth ring no longer keeps a 10 fps `TimelineView` alive at rest.
-It renders one static frame while idle and animates only during an active scan.
-This lets the entire glass hierarchy stop compositing when there is no work.
+### Nothing included is hidden · 不再隐藏已计入清理的项目
 
-概览页的水位环不再在静止时维持 10 fps 的 `TimelineView`。空闲时只绘制一帧，仅在扫描
-期间播放动画，让整套玻璃界面在无任务时真正停止重合成。
+Expanded categories previously displayed only their first 80 entries while
+silently including the remainder in selection and totals. That cap is gone.
+The list remains lazy for performance, but every item included in a cleanup can
+now be inspected, revealed and individually deselected before anything moves.
 
-### More native Liquid Glass · 更原生的液态玻璃
-
-- Sidebar selection, hover and focus are handled by the native macOS sidebar
-  `List` instead of a hand-painted gradient row.
-- Primary actions call the macOS 26 Liquid Glass API directly with
-  `glassEffect(.regular.tint(...).interactive())`.
-- Navigation remains a system `NavigationSplitView`, with native navigation
-  titles, toolbar placement, window dragging, zoom and full-screen behaviour.
-- macOS 15–25 continue to use the existing system-material fallback.
-
-- 侧栏选择、悬停与焦点改由 macOS 原生侧栏 `List` 处理，不再覆盖手绘渐变选中条。
-- 主要操作按钮在 macOS 26 上直接调用系统液态玻璃 API：
-  `glassEffect(.regular.tint(...).interactive())`。
-- 导航继续使用系统 `NavigationSplitView`，标题、工具栏、窗口拖动、缩放和全屏都由系统
-  接管。
-- macOS 15–25 继续使用原有系统材质回退。
+展开分类过去只显示前 80 项，后面的内容却仍会被计入选择和总大小。这个上限现已移除。
+列表继续按需创建行以控制性能，但凡是会参与清理的项目，现在都能在执行前逐项查看、
+在访达定位或取消选择。
 
 ### Install · 安装
 

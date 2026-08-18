@@ -46,9 +46,12 @@ here and have done the right thing.
 **Clean · 清理** — Caches, logs, browser data, developer build output, AI tool
 caches, cloud sync caches, window state, uninstalled-app leftovers, old
 installers and the Trash. Apps holding a cache open are surfaced with the bytes
-they are sitting on, so you know what quitting Chrome would buy you.
+they are sitting on, so you know what quitting Chrome would buy you. Every item
+shows its full path and can be revealed in Finder from its row or context menu
+before you select it.
 缓存、日志、浏览器数据、开发构建产物、AI 工具缓存、云盘缓存、窗口状态、卸载残留、
-旧安装包和废纸篓。正在占用缓存的应用会单独列出来，告诉你退出它们能多清多少。
+旧安装包和废纸篓。正在占用缓存的应用会单独列出来，告诉你退出它们能多清多少。每一项
+都会显示完整路径，也可以通过行内按钮或右键菜单在访达中定位，确认无误后再选择清理。
 
 **Apps · 应用** — Every installed app with its size and when you last opened
 it. Uninstalling shows the full plan first: the bundle plus every preference,
