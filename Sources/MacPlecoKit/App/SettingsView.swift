@@ -3,7 +3,11 @@ import AppKit
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("com.macpleco.menubar") private var menuBarEnabled = true
+    @Binding private var menuBarEnabled: Bool
+
+    init(menuBarEnabled: Binding<Bool>) {
+        _menuBarEnabled = menuBarEnabled
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xl) {

@@ -1,12 +1,23 @@
 import SwiftUI
 import AppKit
 
+enum AppPreference {
+    static let menuBarEnabled = "com.macpleco.menubar"
+}
+
 public struct MacPlecoApp: App {
     @State private var model = AppModel()
+    // Keep scene insertion state in SwiftUI, not in @AppStorage. Binding
+    // MenuBarExtra(isInserted:) directly to @AppStorage triggers a scene/menu
+    // invalidation loop on macOS 26: the main thread continuously rebuilds the
+    // app menu, CPU pins, memory climbs, and the first window beach-balls.
+    @State private var menuBarEnabled: Bool
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @AppStorage("com.macpleco.menubar") private var menuBarEnabled = true
 
-    public init() {}
+    public init() {
+        let stored = UserDefaults.standard.object(forKey: AppPreference.menuBarEnabled) as? Bool
+        _menuBarEnabled = State(initialValue: stored ?? true)
+    }
 
     public var body: some Scene {
         WindowGroup(id: "main") {
@@ -20,20 +31,41 @@ public struct MacPlecoApp: App {
         .defaultSize(width: 1200, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandMenu(t("前往", "Navigate")) {
+                ForEach(Array(Destination.allCases.enumerated()), id: \.element) { index, destination in
+                    Button(destination.title) {
+                        model.destination = destination
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                }
+            }
         }
 
         Settings {
-            SettingsView()
+            SettingsView(menuBarEnabled: persistedMenuBarBinding)
                 .environment(model)
         }
 
-        MenuBarExtra(isInserted: $menuBarEnabled) {
+        MenuBarExtra(isInserted: persistedMenuBarBinding) {
             MenuBarPanel()
                 .environment(model)
         } label: {
             Image(systemName: "fish.fill")
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// Persistence happens at the edge. SwiftUI owns the scene state while
+    /// UserDefaults only stores the next-launch value, avoiding the feedback
+    /// loop caused by using @AppStorage as the scene binding itself.
+    private var persistedMenuBarBinding: Binding<Bool> {
+        Binding(
+            get: { menuBarEnabled },
+            set: { enabled in
+                menuBarEnabled = enabled
+                UserDefaults.standard.set(enabled, forKey: AppPreference.menuBarEnabled)
+            }
+        )
     }
 }
 
@@ -42,7 +74,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // The menu bar panel keeps living when the window closes. The key is
         // unset until the user first touches the toggle, and unset means on.
-        let stored = UserDefaults.standard.object(forKey: "com.macpleco.menubar") as? Bool
+        let stored = UserDefaults.standard.object(forKey: AppPreference.menuBarEnabled) as? Bool
         return !(stored ?? true)
     }
 

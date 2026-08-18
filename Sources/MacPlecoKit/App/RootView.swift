@@ -42,31 +42,20 @@ public struct RootView: View {
 
 // MARK: - Sidebar
 
-/// Rows live inside a real sidebar `List`, so the column keeps the system's
-/// Liquid Glass material. Selection is our own quiet aqua capsule — rendered
-/// per row, not by the List, so the user's system accent colour never fights
-/// the brand.
+/// A real selectable sidebar `List` lets macOS own selection, hover, focus and
+/// keyboard interaction. On macOS 26 that also means the system, rather than a
+/// hand-drawn gradient, supplies the native Liquid Glass selection treatment.
 struct SidebarColumn: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             brand
-            List {
-                ForEach(Array(Destination.allCases.enumerated()), id: \.element) { index, destination in
-                    SidebarRow(
-                        destination: destination,
-                        selected: model.destination == destination,
-                        shortcut: index + 1
-                    ) {
-                        guard model.destination != destination else { return }
-                        withAnimation(.snappy(duration: 0.28)) {
-                            model.destination = destination
-                        }
-                    }
-                    .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
+            List(selection: selection) {
+                ForEach(Destination.allCases) { destination in
+                    Label(destination.title, systemImage: destination.symbol)
+                        .font(.system(size: 14.5, weight: .medium))
+                        .tag(destination)
                 }
             }
             .listStyle(.sidebar)
@@ -138,47 +127,15 @@ struct SidebarColumn: View {
         .padding(.horizontal, Space.md)
         .padding(.bottom, Space.md)
     }
-}
 
-private struct SidebarRow: View {
-    let destination: Destination
-    let selected: Bool
-    let shortcut: Int
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Space.md) {
-                Image(systemName: destination.symbol)
-                    .font(.system(size: 15, weight: selected ? .semibold : .medium))
-                    .frame(width: 22)
-                Text(destination.title)
-                    .font(.system(size: 14.5, weight: selected ? .semibold : .medium))
-                Spacer(minLength: 0)
+    private var selection: Binding<Destination?> {
+        Binding(
+            get: { model.destination },
+            set: { destination in
+                guard let destination, destination != model.destination else { return }
+                model.destination = destination
             }
-            .foregroundStyle(selected ? Color.white : Palette.inkSecondary)
-            .padding(.horizontal, Space.md)
-            .padding(.vertical, 9)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                        .fill(Palette.aquaSweep)
-                        .shadow(color: Palette.aqua.opacity(0.35), radius: 7, y: 2)
-                } else if hovering {
-                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                        .fill(Palette.wellFill)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .onHover { inside in
-            withAnimation(.smooth(duration: 0.16)) { hovering = inside }
-        }
-        .keyboardShortcut(KeyEquivalent(Character("\(shortcut)")), modifiers: .command)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        )
     }
 }
 

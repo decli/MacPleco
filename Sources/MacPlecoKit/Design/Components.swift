@@ -151,28 +151,41 @@ public struct PrimaryButtonStyle: ButtonStyle {
     var tint: Color = Palette.aqua
     var wide: Bool = false
 
+    @ViewBuilder
     public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, wide ? Space.xxl : Space.xl)
-            .padding(.vertical, Space.md)
-            .frame(maxWidth: wide ? .infinity : nil)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(tint.gradient)
-                    .overlay {
-                        // A soft specular highlight along the top edge keeps the
-                        // pill reading as a lit physical object under glass.
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.28), lineWidth: 0.75)
-                            .blendMode(.plusLighter)
-                    }
-            }
-            .shadow(color: tint.opacity(0.34), radius: 14, y: 5)
-            .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .animation(.snappy(duration: 0.16), value: configuration.isPressed)
-            .contentShape(Capsule(style: .continuous))
+        if #available(macOS 26.0, *) {
+            configuration.label
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, wide ? Space.xxl : Space.xl)
+                .padding(.vertical, Space.md)
+                .frame(maxWidth: wide ? .infinity : nil)
+                // Use the system material directly so highlights, lensing and
+                // pointer response follow the current macOS glass appearance.
+                .glassEffect(.regular.tint(tint).interactive(), in: Capsule(style: .continuous))
+                .opacity(configuration.isPressed ? 0.82 : 1)
+                .contentShape(Capsule(style: .continuous))
+        } else {
+            configuration.label
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, wide ? Space.xxl : Space.xl)
+                .padding(.vertical, Space.md)
+                .frame(maxWidth: wide ? .infinity : nil)
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(tint.gradient)
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.28), lineWidth: 0.75)
+                                .blendMode(.plusLighter)
+                        }
+                }
+                .shadow(color: tint.opacity(0.34), radius: 14, y: 5)
+                .scaleEffect(configuration.isPressed ? 0.975 : 1)
+                .animation(.snappy(duration: 0.16), value: configuration.isPressed)
+                .contentShape(Capsule(style: .continuous))
+        }
     }
 }
 

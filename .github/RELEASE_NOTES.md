@@ -1,69 +1,67 @@
-MacPleco 0.3.0 — the hotfix that matters and the glass done right.
+MacPleco 0.3.1 — the launch-freeze fix, verified.
 
-MacPleco 0.3.0 —— 关键修复 + 真正的原生玻璃。
+MacPleco 0.3.1 —— 经实机验证的启动卡死修复。
 
-### Fixed: the launch freeze · 修复：启动即卡死
+### Fixed: Overview no longer beach-balls · 修复：首页不再卡死
 
-0.2.0 could beach-ball permanently on the Overview page. The cause was the
-ambient background: it re-rasterised the entire window on the main thread
-twelve times a second (a TimelineView-driven Canvas behind a 90pt blur inside
-`drawingGroup()`). The water is now drawn as static radial-gradient fields —
-the glass refracts them just the same, and an adversarial review of the fix
-pushed it one step further: even an animated drift would have kept every
-piece of glass chrome re-compositing at display refresh forever, for motion
-of 0.02pt per frame. A cleaner that burns GPU while idle is lying about its
-purpose, so the window now idles completely. Apologies for the force-quits.
+Version 0.3.0 removed an expensive animated background, but a second and more
+fundamental launch bug remained on macOS 26: binding
+`MenuBarExtra(isInserted:)` directly to `@AppStorage` could create a SwiftUI
+scene and main-menu invalidation loop. The main thread rebuilt the application
+menu continuously, pinning a CPU core while memory climbed until the window
+stopped responding.
 
-0.2.0 会在概览页永久风火轮。祸首是环境背景：TimelineView 驱动的 Canvas + 90pt
-模糊 + drawingGroup，每秒在主线程上把整个窗口重新光栅化十二次。现在色场改为静态
-径向渐变 —— 玻璃折射效果不变；而且对修复方案的对抗性评审又往前推了一步：哪怕改成
-漂移动画，也会让所有玻璃件永远以刷新率重合成，只为每帧 0.02pt 的不可见位移。清理
-工具自己空转烧 GPU 是自我背叛，所以现在窗口可以完全空闲。为强制退出致歉。
+0.3.0 虽然移除了高开销的动态背景，但 macOS 26 上还藏着第二个、更根本的启动问题：
+把 `MenuBarExtra(isInserted:)` 直接绑定到 `@AppStorage`，可能触发 SwiftUI 场景与
+主菜单的无限失效循环。主线程会不停重建应用菜单，占满一个 CPU 核心，内存持续增长，
+最终让首页完全失去响应。
 
-Also from the review: the large-files list no longer builds 120 rows (each
-with a synchronous disk icon read) in one main-thread update; the depth
-ring's resting swell drops to 10 fps; live sampling's lifetime is tied to
-task cancellation so a flaky menu-bar callback can't leave it running
-forever; and the disk-capacity query moved off the main thread.
+The menu-bar preference now lives in ordinary SwiftUI state. Persistence is
+performed only when that state changes, so the setting still survives relaunch
+without participating in scene invalidation. On macOS 26.5.2, the same launch
+that previously reached 100% CPU and more than 800 MB now settles at 0% CPU,
+about 82 MB, with the main thread asleep in the normal event loop.
 
-评审还带来：大文件列表不再一次性在主线程构建 120 行（每行一次同步磁盘图标读取）；
-深度环静息水波降到 10 fps；采样生命周期绑定任务取消，菜单栏回调丢失也不会永远空转；
-磁盘容量查询移出主线程。
+菜单栏开关现在由普通 SwiftUI 状态管理，只在状态改变时写入偏好设置。因此它仍能跨启动
+保存，却不会再参与场景失效循环。实测同一台 macOS 26.5.2：修复前 CPU 约 100%、内存
+超过 800 MB；修复后空闲 CPU 为 0%，内存约 82 MB，主线程正常休眠等待事件。
 
-### Native Liquid Glass, for real this time · 这次是真的原生液态玻璃
+### Truly idle when idle · 静止时真正静止
 
-You asked the right question: macOS does have a direct API for this — two,
-in fact. `glassEffect()` for custom elements (we were using it), and the
-system containers themselves, which get the unmistakable Tahoe chrome for
-free. 0.2 hand-built the sidebar and title bar to control every pixel, which
-is precisely why it stopped looking native. 0.3 returns the shell to the
-system: a real `NavigationSplitView` sidebar (the OS's own floating glass),
-real toolbar items in the system's glass capsules, real titles via the
-navigation bar. Window dragging, double-click zoom and full screen are
-untouched system behaviour. Our own glass is reserved for content cards,
-where custom elements belong.
+The Overview depth ring no longer keeps a 10 fps `TimelineView` alive at rest.
+It renders one static frame while idle and animates only during an active scan.
+This lets the entire glass hierarchy stop compositing when there is no work.
 
-问得好：macOS 确实有直接的 API —— 其实是两层。自定义控件用 `glassEffect()`（我们
-一直在用）；而系统容器本身在 macOS 26 上自动获得那种一眼认出的 Tahoe 玻璃。0.2 为
-了控制每个像素自绘了侧栏和标题栏，恰恰因此失去了原生感。0.3 把外壳还给系统：真正的
-NavigationSplitView 侧栏（系统自己的悬浮玻璃）、真正的工具栏胶囊、真正的导航标题。
-窗口拖拽、双击缩放、全屏全部是未经改动的系统行为。自绘玻璃只留给内容卡片。
+概览页的水位环不再在静止时维持 10 fps 的 `TimelineView`。空闲时只绘制一帧，仅在扫描
+期间播放动画，让整套玻璃界面在无任务时真正停止重合成。
 
-### Also · 顺带
+### More native Liquid Glass · 更原生的液态玻璃
 
-- Full Disk Access probe moved off the main thread. 权限探测移出主线程。
-- Live sampling is reference-counted, so closing the menu bar panel no longer
-  freezes the Monitor page's charts. 采样引用计数化，关掉菜单栏面板不再冻结监控页。
-- Page actions (rescan, tabs, run) live in the real toolbar. 页面操作进入原生工具栏。
+- Sidebar selection, hover and focus are handled by the native macOS sidebar
+  `List` instead of a hand-painted gradient row.
+- Primary actions call the macOS 26 Liquid Glass API directly with
+  `glassEffect(.regular.tint(...).interactive())`.
+- Navigation remains a system `NavigationSplitView`, with native navigation
+  titles, toolbar placement, window dragging, zoom and full-screen behaviour.
+- macOS 15–25 continue to use the existing system-material fallback.
+
+- 侧栏选择、悬停与焦点改由 macOS 原生侧栏 `List` 处理，不再覆盖手绘渐变选中条。
+- 主要操作按钮在 macOS 26 上直接调用系统液态玻璃 API：
+  `glassEffect(.regular.tint(...).interactive())`。
+- 导航继续使用系统 `NavigationSplitView`，标题、工具栏、窗口拖动、缩放和全屏都由系统
+  接管。
+- macOS 15–25 继续使用原有系统材质回退。
 
 ### Install · 安装
 
-Drag to Applications; first launch needs System Settings → Privacy & Security
-→ Open Anyway (or `xattr -dr com.apple.quarantine /Applications/MacPleco.app`);
-grant Full Disk Access when asked. macOS 15+; Liquid Glass renders on macOS 26.
+Drag MacPleco into Applications. On first launch, use System Settings →
+Privacy & Security → Open Anyway if macOS asks, then grant Full Disk Access
+for cache measurement. Requires macOS 15 or later; native Liquid Glass renders
+on macOS 26.
 
-拖入应用程序；首次打开在「隐私与安全性」点「仍要打开」；按引导授予完全磁盘访问权限。
-需要 macOS 15+，液态玻璃在 macOS 26 上呈现。
+把 MacPleco 拖入「应用程序」。首次启动如遇提示，请前往「系统设置 → 隐私与安全性」
+选择「仍要打开」，然后授予完全磁盘访问权限以测量缓存。需要 macOS 15 或更高版本；
+原生液态玻璃效果在 macOS 26 上呈现。
 
 ---
 

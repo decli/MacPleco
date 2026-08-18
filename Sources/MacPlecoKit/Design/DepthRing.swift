@@ -49,62 +49,70 @@ public struct DepthRing: View {
 
     // MARK: - Water
 
+    @ViewBuilder
     private var water: some View {
-        // 30 fps only while work is happening; the resting swell is 2pt of
-        // amplitude and reads identically at 10 fps, so the landing page does
-        // not tick a canvas thirty times a second forever.
-        TimelineView(.animation(minimumInterval: isWorking ? 1.0 / 30.0 : 1.0 / 10.0, paused: reduceMotion)) { timeline in
-            let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
-            Canvas { context, size in
-                let bounds = CGRect(origin: .zero, size: size).insetBy(dx: 17, dy: 17)
-                context.clip(to: Path(ellipseIn: bounds))
+        // The overview must genuinely idle. A TimelineView that ticks at even
+        // 10 fps keeps the entire glass hierarchy compositing forever. Animate
+        // only while a scan is visibly in progress; otherwise render one frame.
+        if isWorking && !reduceMotion {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                waterFrame(at: timeline.date.timeIntervalSinceReferenceDate)
+            }
+        } else {
+            waterFrame(at: 0)
+        }
+    }
 
-                // A faint inner pool so the porthole reads as filled glass even
-                // above the waterline.
-                context.fill(
-                    Path(ellipseIn: bounds),
-                    with: .linearGradient(
-                        Gradient(colors: [Palette.aqua.opacity(0.05), Palette.flow.opacity(0.10)]),
-                        startPoint: CGPoint(x: bounds.midX, y: bounds.minY),
-                        endPoint: CGPoint(x: bounds.midX, y: bounds.maxY)
-                    )
+    private func waterFrame(at t: TimeInterval) -> some View {
+        Canvas { context, size in
+            let bounds = CGRect(origin: .zero, size: size).insetBy(dx: 17, dy: 17)
+            context.clip(to: Path(ellipseIn: bounds))
+
+            // A faint inner pool so the porthole reads as filled glass even
+            // above the waterline.
+            context.fill(
+                Path(ellipseIn: bounds),
+                with: .linearGradient(
+                    Gradient(colors: [Palette.aqua.opacity(0.05), Palette.flow.opacity(0.10)]),
+                    startPoint: CGPoint(x: bounds.midX, y: bounds.minY),
+                    endPoint: CGPoint(x: bounds.midX, y: bounds.maxY)
                 )
+            )
 
-                let level = bounds.maxY - bounds.height * usedFraction
-                let amplitude: CGFloat = isWorking ? 5.5 : 2
-                let phase = t * (isWorking ? 1.5 : 0.7)
+            let level = bounds.maxY - bounds.height * usedFraction
+            let amplitude: CGFloat = isWorking ? 5.5 : 2
+            let phase = t * (isWorking ? 1.5 : 0.7)
 
-                context.fill(
-                    wavePath(in: bounds, level: level, phase: phase, amplitude: amplitude, wavelength: bounds.width / 1.1),
-                    with: .linearGradient(
-                        Gradient(colors: [
-                            Palette.aquaBright.opacity(0.55),
-                            Palette.aqua.opacity(0.40),
-                            Palette.aquaDeep.opacity(0.22)
-                        ]),
-                        startPoint: CGPoint(x: bounds.midX, y: level),
-                        endPoint: CGPoint(x: bounds.midX, y: bounds.maxY)
-                    )
+            context.fill(
+                wavePath(in: bounds, level: level, phase: phase, amplitude: amplitude, wavelength: bounds.width / 1.1),
+                with: .linearGradient(
+                    Gradient(colors: [
+                        Palette.aquaBright.opacity(0.55),
+                        Palette.aqua.opacity(0.40),
+                        Palette.aquaDeep.opacity(0.22)
+                    ]),
+                    startPoint: CGPoint(x: bounds.midX, y: level),
+                    endPoint: CGPoint(x: bounds.midX, y: bounds.maxY)
                 )
-                context.fill(
-                    wavePath(in: bounds, level: level + 6, phase: -phase * 0.6, amplitude: amplitude * 0.7, wavelength: bounds.width / 0.8),
-                    with: .color(Palette.aqua.opacity(0.18))
-                )
+            )
+            context.fill(
+                wavePath(in: bounds, level: level + 6, phase: -phase * 0.6, amplitude: amplitude * 0.7, wavelength: bounds.width / 0.8),
+                with: .color(Palette.aqua.opacity(0.18))
+            )
 
-                // Surface glint.
-                var glint = Path()
-                glint.move(to: CGPoint(x: bounds.minX, y: level))
-                var x = bounds.minX
-                while x <= bounds.maxX {
-                    let angle = Double(x / (bounds.width / 1.1)) * 2 * .pi + phase
-                    glint.addLine(to: CGPoint(x: x, y: level + amplitude * CGFloat(sin(angle))))
-                    x += 3
-                }
-                context.stroke(glint, with: .color(.white.opacity(0.35)), lineWidth: 1)
+            // Surface glint.
+            var glint = Path()
+            glint.move(to: CGPoint(x: bounds.minX, y: level))
+            var x = bounds.minX
+            while x <= bounds.maxX {
+                let angle = Double(x / (bounds.width / 1.1)) * 2 * .pi + phase
+                glint.addLine(to: CGPoint(x: x, y: level + amplitude * CGFloat(sin(angle))))
+                x += 3
+            }
+            context.stroke(glint, with: .color(.white.opacity(0.35)), lineWidth: 1)
 
-                if isWorking {
-                    drawBubbles(&context, bounds: bounds, level: level, t: t)
-                }
+            if isWorking {
+                drawBubbles(&context, bounds: bounds, level: level, t: t)
             }
         }
     }
