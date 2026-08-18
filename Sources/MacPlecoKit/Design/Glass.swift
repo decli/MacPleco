@@ -23,35 +23,33 @@ private struct GlassSurface<S: InsettableShape>: ViewModifier {
     let level: GlassLevel
     let tint: Color?
 
+    // Tint is a faint wash *between* the glass and the content, never
+    // `Glass.tint(_:)`: that API saturates the whole pane — the first build's
+    // caution banner rendered as a solid amber slab because of it. A 12% fill
+    // reads as coloured light in the water instead.
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            content.glassEffect(resolvedGlass, in: shape)
+            content
+                .background {
+                    if let tint {
+                        shape.fill(tint.opacity(0.12))
+                    }
+                }
+                .glassEffect(level == .interactive ? Glass.regular.interactive() : .regular, in: shape)
         } else {
             content
+                .background {
+                    if let tint {
+                        shape.fill(tint.opacity(0.12))
+                    }
+                }
                 .background(.ultraThinMaterial, in: shape)
                 .overlay {
                     shape
                         .strokeBorder(Palette.hairlineStrong, lineWidth: 0.5)
                 }
-                .overlay {
-                    if let tint {
-                        shape.fill(tint.opacity(0.18))
-                    }
-                }
         }
-    }
-
-    @available(macOS 26.0, *)
-    private var resolvedGlass: Glass {
-        var glass = Glass.regular
-        if let tint {
-            glass = glass.tint(tint)
-        }
-        if level == .interactive {
-            glass = glass.interactive()
-        }
-        return glass
     }
 }
 

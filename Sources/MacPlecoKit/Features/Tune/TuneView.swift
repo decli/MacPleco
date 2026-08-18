@@ -7,9 +7,9 @@ struct TuneView: View {
 
     var body: some View {
         Page(destination: .tune, trailing: AnyView(runButton)) {
-            intro
+            intro.rises(0)
             LazyVStack(spacing: Space.md) {
-                ForEach(tune.tasks) { task in
+                ForEach(Array(tune.tasks.enumerated()), id: \.element.id) { index, task in
                     TaskCard(
                         task: task,
                         isSelected: tune.selected.contains(task.id),
@@ -18,6 +18,7 @@ struct TuneView: View {
                         onToggle: { tune.toggle(task.id) },
                         onRunAlone: { Task { await tune.run(task) } }
                     )
+                    .rises(min(index + 1, 8))
                 }
             }
         }
@@ -48,24 +49,25 @@ struct TuneView: View {
         }
     }
 
+    /// Appears only once something is ticked. A permanently visible but
+    /// disabled primary button just reads as broken chrome.
+    @ViewBuilder
     private var runButton: some View {
-        Button {
-            Task { await tune.runSelected() }
-        } label: {
-            HStack(spacing: Space.sm) {
-                if tune.isRunning {
-                    ProgressView().controlSize(.small).tint(.white)
+        if tune.selectedCount > 0 {
+            Button {
+                Task { await tune.runSelected() }
+            } label: {
+                HStack(spacing: Space.sm) {
+                    if tune.isRunning {
+                        ProgressView().controlSize(.small).tint(.white)
+                    }
+                    Text(t("执行 \(tune.selectedCount) 项", "Run \(tune.selectedCount)"))
                 }
-                Text(
-                    tune.selectedCount > 0
-                        ? t("执行 \(tune.selectedCount) 项", "Run \(tune.selectedCount)")
-                        : t("执行", "Run")
-                )
             }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(tune.isRunning)
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
         }
-        .buttonStyle(PrimaryButtonStyle())
-        .disabled(tune.selectedCount == 0 || tune.isRunning)
-        .opacity(tune.selectedCount == 0 ? 0.5 : 1)
     }
 }
 

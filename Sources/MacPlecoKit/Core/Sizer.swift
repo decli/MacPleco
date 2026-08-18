@@ -122,6 +122,44 @@ public enum Sizer {
         return results
     }
 
+    /// Sizes many paths concurrently, delivering each result the moment it
+    /// lands instead of holding everything until the batch completes.
+    ///
+    /// This is what keeps the Space page from sitting blank: the home folder's
+    /// small entries finish in the first second or two and appear immediately,
+    /// while the one 150 GB Library walk fills in last. The old batch variant
+    /// made everything wait for the slowest walk.
+    public static func streamSizes(
+        of urls: [URL],
+        token: ScanToken? = nil,
+        maxConcurrent: Int = 10,
+        onEach: @escaping @Sendable (Int, Int64) -> Void
+    ) async {
+        guard !urls.isEmpty else { return }
+        var next = 0
+
+        await withTaskGroup(of: Void.self) { group in
+            let window = min(maxConcurrent, urls.count)
+            while next < window {
+                let index = next
+                let url = urls[index]
+                group.addTask { onEach(index, size(of: url, token: token)) }
+                next += 1
+            }
+
+            while await group.next() != nil {
+                if token?.isCancelled == true { break }
+                if next < urls.count {
+                    let index = next
+                    let url = urls[index]
+                    group.addTask { onEach(index, size(of: url, token: token)) }
+                    next += 1
+                }
+            }
+            group.cancelAll()
+        }
+    }
+
     /// Immediate children of a directory, without descending.
     public static func children(of url: URL, includeHidden: Bool = true) -> [URL] {
         let fm = FileManager()

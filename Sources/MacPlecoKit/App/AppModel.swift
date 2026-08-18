@@ -53,6 +53,32 @@ public enum Destination: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// The user's appearance override. Glass looks its best in dark water, but the
+/// choice belongs to the user, not the brand.
+public enum Appearance: String, CaseIterable, Identifiable, Sendable {
+    case system
+    case light
+    case dark
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .system: return t("跟随系统", "Match system")
+        case .light: return t("浅色", "Light")
+        case .dark: return t("深色", "Dark")
+        }
+    }
+
+    public var scheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 /// Root application state. One instance lives for the lifetime of the window
 /// and is handed to every view through the environment.
 @Observable
@@ -60,6 +86,15 @@ public enum Destination: String, CaseIterable, Identifiable, Hashable {
 public final class AppModel {
     public var destination: Destination = .overview
     public var language: Lang = Localization.current
+
+    public var appearance: Appearance = {
+        let raw = UserDefaults.standard.string(forKey: "com.macpleco.appearance") ?? ""
+        return Appearance(rawValue: raw) ?? .system
+    }() {
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "com.macpleco.appearance")
+        }
+    }
 
     /// Shared across Clean and Apps: both need to know what is installed, and
     /// scanning `/Applications` twice would be wasted work.
@@ -74,6 +109,7 @@ public final class AppModel {
     public let monitor = MonitorModel()
     public let storage = StorageModel()
     public let permissions = PermissionsModel()
+    public let ledger = LedgerModel()
 
     public init() {}
 

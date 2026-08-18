@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MonitorView: View {
     @Environment(AppModel.self) private var model
@@ -7,9 +8,9 @@ struct MonitorView: View {
 
     var body: some View {
         Page(destination: .monitor) {
-            gauges
-            processList
-            footnote
+            gauges.rises(0)
+            processList.rises(1)
+            footnote.rises(2)
         }
         .task {
             monitor.start()
@@ -23,7 +24,7 @@ struct MonitorView: View {
 
     private var gauges: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 240), spacing: Space.md)],
+            columns: [GridItem(.adaptive(minimum: 250), spacing: Space.md)],
             spacing: Space.md
         ) {
             MetricCard(
@@ -34,18 +35,20 @@ struct MonitorView: View {
                     "应用 \(percent(monitor.cpuUser)) · 系统 \(percent(monitor.cpuSystem))",
                     "Apps \(percent(monitor.cpuUser)) · System \(percent(monitor.cpuSystem))"
                 ),
-                fraction: monitor.cpuTotal,
+                fraction: nil,
                 history: monitor.cpuHistory,
                 tint: monitor.cpuTotal > 0.85 ? Palette.caution : Palette.aqua
-            )
+            ) {
+                CoreGrid(loads: monitor.coreLoads)
+            }
 
             MetricCard(
                 symbol: "memorychip",
                 label: t("内存", "Memory"),
-                value: Bytes.format(monitor.memory.used),
+                value: Bytes.formatMemory(monitor.memory.used),
                 detail: t(
-                    "共 \(Bytes.format(monitor.memory.total)) · 已压缩 \(Bytes.format(monitor.memory.compressed))",
-                    "of \(Bytes.format(monitor.memory.total)) · \(Bytes.format(monitor.memory.compressed)) compressed"
+                    "共 \(Bytes.formatMemory(monitor.memory.total)) · 已压缩 \(Bytes.formatMemory(monitor.memory.compressed))",
+                    "of \(Bytes.formatMemory(monitor.memory.total)) · \(Bytes.formatMemory(monitor.memory.compressed)) compressed"
                 ),
                 fraction: monitor.memory.usedFraction,
                 history: monitor.memoryHistory,
@@ -66,17 +69,34 @@ struct MonitorView: View {
             )
 
             MetricCard(
-                symbol: "thermometer.medium",
-                label: t("散热状态", "Thermal state"),
-                value: SystemInfo.thermalDescription,
+                symbol: "macbook",
+                label: t("这台 Mac", "This Mac"),
+                value: SystemInfo.chip.replacingOccurrences(of: "Apple ", with: ""),
                 detail: t(
-                    "\(SystemInfo.coreCount) 核 · 已运行 \(RelativeTime.duration(SystemInfo.uptime))",
-                    "\(SystemInfo.coreCount) cores · up \(RelativeTime.duration(SystemInfo.uptime))"
+                    "\(SystemInfo.coreCount) 核 · \(Bytes.formatMemory(SystemInfo.physicalMemory)) 内存 · macOS \(SystemInfo.osVersion)",
+                    "\(SystemInfo.coreCount) cores · \(Bytes.formatMemory(SystemInfo.physicalMemory)) memory · macOS \(SystemInfo.osVersion)"
                 ),
                 fraction: nil,
                 history: [],
-                tint: SystemInfo.thermalState == .nominal ? Palette.positive : Palette.caution
-            )
+                tint: SystemInfo.thermalState == .nominal ? Palette.positive : Palette.caution,
+                badge: SystemInfo.thermalDescription
+            ) {
+                HStack(spacing: Space.sm) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.inkTertiary)
+                    Text(
+                        t(
+                            "已运行 \(RelativeTime.duration(SystemInfo.uptime))",
+                            "Up \(RelativeTime.duration(SystemInfo.uptime))"
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.inkSecondary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, Space.xs)
+            }
         }
     }
 
@@ -125,8 +145,10 @@ struct MonitorView: View {
 
     private func processRow(_ process: ProcessSample) -> some View {
         HStack(spacing: Space.md) {
+            ProcessIcon(pid: process.pid)
+
             Text(process.name)
-                .font(.system(size: 12))
+                .font(.system(size: 12.5))
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,11 +158,11 @@ struct MonitorView: View {
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 58, alignment: .trailing)
 
-            Text(Bytes.format(process.memory))
-                .font(.system(size: 11, design: .rounded))
+            Text(Bytes.formatMemory(process.memory))
+                .font(.system(size: 11.5, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.inkSecondary)
-                .frame(width: 76, alignment: .trailing)
+                .frame(width: 78, alignment: .trailing)
 
             HStack(spacing: Space.sm) {
                 CapacityBar(
@@ -148,15 +170,15 @@ struct MonitorView: View {
                     tint: process.cpu > 60 ? Palette.caution : Palette.aqua,
                     height: 4
                 )
-                .frame(width: 54)
+                .frame(width: 56)
                 Text(String(format: "%.1f%%", process.cpu))
-                    .font(.system(size: 11, design: .rounded))
+                    .font(.system(size: 11.5, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
-                    .frame(width: 48, alignment: .trailing)
+                    .frame(width: 50, alignment: .trailing)
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
     }
 
     private var footnote: some View {
@@ -172,9 +194,75 @@ struct MonitorView: View {
     }
 }
 
+// MARK: - Process icon
+
+/// GUI processes get their real app icon; daemons get a quiet gear. Lookups go
+/// through `NSRunningApplication` and are memoised per pid.
+private struct ProcessIcon: View {
+    let pid: Int32
+
+    var body: some View {
+        if let icon = ProcessIconCache.shared.icon(for: pid) {
+            Image(nsImage: icon)
+                .resizable()
+                .frame(width: 18, height: 18)
+        } else {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.inkFaint)
+                .frame(width: 18, height: 18)
+        }
+    }
+}
+
+@MainActor
+private final class ProcessIconCache {
+    static let shared = ProcessIconCache()
+    private var cache: [Int32: NSImage?] = [:]
+
+    func icon(for pid: Int32) -> NSImage? {
+        if let hit = cache[pid] { return hit }
+        let image = NSRunningApplication(processIdentifier: pid)?.icon
+        image?.size = NSSize(width: 36, height: 36)
+        if cache.count > 400 { cache.removeAll() }
+        cache[pid] = image
+        return image
+    }
+}
+
+// MARK: - Core grid
+
+/// One slim bar per logical core, under the CPU sparkline. The point is shape
+/// recognition — "one core pinned" versus "everything busy" — not numbers.
+private struct CoreGrid: View {
+    let loads: [Double]
+
+    var body: some View {
+        if loads.isEmpty {
+            EmptyView()
+        } else {
+            HStack(alignment: .bottom, spacing: 2.5) {
+                ForEach(Array(loads.enumerated()), id: \.offset) { _, load in
+                    GeometryReader { geo in
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                                .fill(load > 0.85 ? Palette.caution : Palette.aqua)
+                                .frame(height: max(2, geo.size.height * load))
+                        }
+                    }
+                }
+            }
+            .frame(height: 22)
+            .animation(.smooth(duration: 0.5), value: loads)
+            .accessibilityLabel(t("每个核心的负载", "Per-core load"))
+        }
+    }
+}
+
 // MARK: - Metric card
 
-private struct MetricCard: View {
+private struct MetricCard<Extra: View>: View {
     let symbol: String
     let label: String
     let value: String
@@ -182,37 +270,73 @@ private struct MetricCard: View {
     let fraction: Double?
     let history: [Double]
     let tint: Color
+    var badge: String?
+    @ViewBuilder var extra: () -> Extra
+
+    init(
+        symbol: String,
+        label: String,
+        value: String,
+        detail: String,
+        fraction: Double?,
+        history: [Double],
+        tint: Color,
+        badge: String? = nil,
+        @ViewBuilder extra: @escaping () -> Extra = { EmptyView() }
+    ) {
+        self.symbol = symbol
+        self.label = label
+        self.value = value
+        self.detail = detail
+        self.fraction = fraction
+        self.history = history
+        self.tint = tint
+        self.badge = badge
+        self.extra = extra
+    }
 
     var body: some View {
-        GlassCard(padding: Space.lg, radius: Radius.card) {
+        GlassCard(padding: Space.lg, radius: Radius.card, lifts: true) {
             VStack(alignment: .leading, spacing: Space.sm) {
                 HStack(spacing: Space.sm) {
                     Image(systemName: symbol)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11.5))
                         .foregroundStyle(tint)
                     Text(label)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Palette.inkTertiary)
-                    Spacer()
+                    Spacer(minLength: 0)
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, Space.sm)
+                            .padding(.vertical, 2.5)
+                            .background { Capsule().fill(tint.opacity(0.14)) }
+                    }
                 }
 
                 Text(value)
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(.system(size: 25, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
                     .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
 
-                Sparkline(values: history, tint: tint)
-                    .frame(height: 30)
+                if !history.isEmpty {
+                    Sparkline(values: history, tint: tint)
+                        .frame(height: 30)
+                }
+
+                extra()
 
                 if let fraction {
                     CapacityBar(fraction: fraction, tint: tint, height: 4)
                 }
 
                 Text(detail)
-                    .font(.system(size: 10))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)

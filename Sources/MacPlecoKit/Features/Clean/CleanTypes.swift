@@ -183,10 +183,19 @@ public struct CleanCategory: Identifiable, Sendable {
         return selected == items.count ? .all : .partial
     }
 
-    /// The strictest safety level present, used to colour the category.
+    /// The category's own character, from the catalog policy.
+    ///
+    /// Deliberately *not* the strictest item inside: one cautious entry in two
+    /// hundred safe caches used to paint the whole category amber, which made
+    /// every row look like a warning and taught users to ignore the colour.
+    /// Exceptions keep their own chip at item level.
     public var safety: Safety {
-        if items.contains(where: { $0.safety == .careful }) { return .careful }
-        if items.contains(where: { $0.safety == .review }) { return .review }
-        return .safe
+        CleanCatalog.policy(for: id).safety
+    }
+
+    /// True when something inside carries more risk than the category itself —
+    /// surfaced as a small footnote count rather than recolouring the row.
+    public var flaggedCount: Int {
+        items.filter { $0.safety != .safe }.count
     }
 }

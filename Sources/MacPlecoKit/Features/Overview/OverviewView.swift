@@ -10,9 +10,13 @@ struct OverviewView: View {
         Page(destination: .overview) {
             if !model.permissions.hasFullDiskAccess {
                 PermissionCard(permissions: model.permissions)
+                    .rises(0)
             }
-            hero
-            insights
+            hero.rises(1)
+            insights.rises(2)
+            if model.ledger.totalRuns > 0 {
+                ledgerStrip.rises(3)
+            }
         }
         .task {
             model.permissions.refresh()
@@ -24,7 +28,7 @@ struct OverviewView: View {
     // MARK: - Hero
 
     private var hero: some View {
-        GlassCard(padding: Space.xl) {
+        GlassCard(padding: Space.xl + Space.xs) {
             HStack(alignment: .center, spacing: Space.huge) {
                 DepthRing(
                     usedFraction: storage.usedFraction,
@@ -40,19 +44,22 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         Text(headline)
-                            .font(.system(size: 24, weight: .semibold, design: .rounded))
+                            .font(.system(size: 27, weight: .bold, design: .rounded))
                             .foregroundStyle(Palette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(supporting)
-                            .font(.system(size: 13))
+                            .font(.system(size: 13.5))
                             .foregroundStyle(Palette.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .lineSpacing(2)
                     }
 
                     HStack(spacing: Space.md) {
                         Button {
                             clean.selectRecommended()
-                            model.destination = .clean
+                            withAnimation(.snappy(duration: 0.32)) {
+                                model.destination = .clean
+                            }
                         } label: {
                             HStack(spacing: Space.sm) {
                                 Image(systemName: "sparkles")
@@ -64,18 +71,25 @@ struct OverviewView: View {
                         .opacity(clean.isScanning || clean.totalSize == 0 ? 0.5 : 1)
 
                         Button(t("看看有哪些", "See what's there")) {
-                            model.destination = .clean
+                            withAnimation(.snappy(duration: 0.32)) {
+                                model.destination = .clean
+                            }
                         }
                         .buttonStyle(GhostButtonStyle())
                     }
 
-                    Text(
-                        t(
-                            "清理时所有内容都会先进废纸篓，不会直接删掉。",
-                            "Nothing is deleted outright — everything goes to the Trash first."
+                    Label {
+                        Text(
+                            t(
+                                "清理时所有内容都会先进废纸篓，不会直接删掉。",
+                                "Nothing is deleted outright — everything goes to the Trash first."
+                            )
                         )
-                    )
-                    .font(.system(size: 11))
+                    } icon: {
+                        Image(systemName: "arrow.uturn.backward.circle.fill")
+                            .foregroundStyle(Palette.aqua)
+                    }
+                    .font(.system(size: 11.5))
                     .foregroundStyle(Palette.inkTertiary)
                 }
 
@@ -127,7 +141,7 @@ struct OverviewView: View {
 
     private var insights: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 210), spacing: Space.md)],
+            columns: [GridItem(.adaptive(minimum: 224), spacing: Space.md)],
             spacing: Space.md
         ) {
             InsightCard(
@@ -160,15 +174,20 @@ struct OverviewView: View {
 
             InsightCard(
                 symbol: "cpu",
-                label: SystemInfo.chip,
-                value: SystemInfo.thermalDescription,
+                label: t("芯片", "Chip"),
+                value: chipName,
                 detail: t(
-                    "\(Bytes.format(SystemInfo.physicalMemory)) 内存 · macOS \(SystemInfo.osVersion)",
-                    "\(Bytes.format(SystemInfo.physicalMemory)) memory · macOS \(SystemInfo.osVersion)"
+                    "\(Bytes.formatMemory(SystemInfo.physicalMemory)) 内存 · macOS \(SystemInfo.osVersion)",
+                    "\(Bytes.formatMemory(SystemInfo.physicalMemory)) memory · macOS \(SystemInfo.osVersion)"
                 ),
-                tint: SystemInfo.thermalState == .nominal ? Palette.positive : Palette.caution
+                tint: SystemInfo.thermalState == .nominal ? Palette.positive : Palette.caution,
+                badge: SystemInfo.thermalDescription
             )
         }
+    }
+
+    private var chipName: String {
+        SystemInfo.chip.replacingOccurrences(of: "Apple ", with: "")
     }
 
     private var idleAppsDetail: String {
@@ -181,6 +200,40 @@ struct OverviewView: View {
         }
         return t("其中 \(idle) 个半年没打开", "\(idle) untouched for 6 months")
     }
+
+    // MARK: - Ledger strip
+
+    private var ledgerStrip: some View {
+        let ledger = model.ledger
+        return GlassCard(padding: Space.lg, radius: Radius.card, tint: Palette.aqua) {
+            HStack(spacing: Space.md) {
+                Image(systemName: "fish.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Palette.aquaSweep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(
+                        t(
+                            "MacPleco 已累计为这台 Mac 腾出 \(Bytes.format(ledger.totalBytes))",
+                            "MacPleco has freed \(Bytes.format(ledger.totalBytes)) on this Mac so far"
+                        )
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                    if let last = ledger.lastRecord {
+                        Text(
+                            t(
+                                "共 \(ledger.totalRuns) 次清理 · 上次是\(RelativeTime.describe(last.date))",
+                                "\(ledger.totalRuns) cleans · last one \(RelativeTime.describe(last.date).lowercased())"
+                            )
+                        )
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.inkSecondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
 }
 
 // MARK: - Insight card
@@ -192,22 +245,32 @@ struct InsightCard: View {
     let detail: String
     var progress: Double?
     var tint: Color = Palette.aqua
+    var badge: String?
 
     var body: some View {
-        GlassCard(padding: Space.lg, radius: Radius.card) {
+        GlassCard(padding: Space.lg, radius: Radius.card, lifts: true) {
             VStack(alignment: .leading, spacing: Space.sm) {
                 HStack(spacing: Space.sm) {
                     Image(systemName: symbol)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11.5))
                         .foregroundStyle(tint)
                     Text(label)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Palette.inkTertiary)
                         .lineLimit(1)
+                    Spacer(minLength: 0)
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, Space.sm)
+                            .padding(.vertical, 2.5)
+                            .background { Capsule().fill(tint.opacity(0.14)) }
+                    }
                 }
 
                 Text(value)
-                    .font(.system(size: 21, weight: .semibold, design: .rounded))
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
@@ -218,7 +281,7 @@ struct InsightCard: View {
                 }
 
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)

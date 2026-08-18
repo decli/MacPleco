@@ -7,23 +7,32 @@ struct CleanView: View {
     private var clean: CleanModel { model.clean }
 
     var body: some View {
-        Page(destination: .clean, trailing: AnyView(rescanButton)) {
-            switch clean.phase {
-            case .idle, .scanning:
-                ScanningCard(model: clean)
-            case .ready, .cleaning:
-                summary
-                blockedBanner
-                categoryList
-            case .finished(let bytes, let trashed, let erased):
-                FinishedCard(bytes: bytes, trashed: trashed, erased: erased) {
-                    clean.dismissResult()
-                }
-                if !clean.categories.isEmpty {
+        ZStack {
+            Page(destination: .clean, trailing: AnyView(rescanButton)) {
+                switch clean.phase {
+                case .idle, .scanning:
+                    ScanningCard(model: clean).rises(0)
+                case .ready, .cleaning:
+                    summary.rises(0)
+                    blockedBanner.rises(1)
                     categoryList
+                case .finished(let bytes, let trashed, let erased):
+                    FinishedCard(bytes: bytes, trashed: trashed, erased: erased) {
+                        clean.dismissResult()
+                    }
+                    .rises(0)
+                    if !clean.categories.isEmpty {
+                        categoryList
+                    }
                 }
             }
+
+            if clean.isCleaning {
+                CleaningVeil()
+                    .transition(.opacity)
+            }
         }
+        .animation(.smooth(duration: 0.35), value: clean.isCleaning)
         .task {
             await clean.scanIfNeeded(registry: model.registry)
         }
@@ -49,17 +58,17 @@ struct CleanView: View {
                 HStack(alignment: .top, spacing: Space.xl) {
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text(t("已选择", "Selected"))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(Palette.inkTertiary)
                         HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
                             let parts = Bytes.split(clean.selectedSize)
                             Text(parts.number)
-                                .font(.system(size: 42, weight: .semibold, design: .rounded))
+                                .font(.system(size: 44, weight: .bold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(Palette.ink)
                                 .contentTransition(.numericText())
                             Text(parts.unit)
-                                .font(.system(size: 18, weight: .medium, design: .rounded))
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundStyle(Palette.inkSecondary)
                         }
                         Text(
@@ -90,17 +99,11 @@ struct CleanView: View {
 
     private var cleanButton: some View {
         Button {
-            Task { await clean.clean(storage: model.storage) }
+            Task { await clean.clean(storage: model.storage, ledger: model.ledger) }
         } label: {
             HStack(spacing: Space.sm) {
-                if clean.isCleaning {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white)
-                } else {
-                    Image(systemName: clean.permanentDelete ? "trash.slash" : "trash")
-                        .font(.system(size: 13, weight: .semibold))
-                }
+                Image(systemName: clean.permanentDelete ? "trash.slash" : "trash")
+                    .font(.system(size: 13, weight: .semibold))
                 Text(
                     clean.permanentDelete
                         ? t("永久删除 \(Bytes.format(clean.selectedSize))", "Erase \(Bytes.format(clean.selectedSize))")
@@ -113,6 +116,7 @@ struct CleanView: View {
         )
         .disabled(clean.selectedCount == 0 || clean.isBusy)
         .opacity(clean.selectedCount == 0 ? 0.5 : 1)
+
     }
 
     private var quickSelects: some View {
@@ -128,13 +132,11 @@ struct CleanView: View {
             withAnimation(.smooth(duration: 0.25)) { action() }
         }
         .buttonStyle(.plain)
-        .font(.system(size: 11, weight: .medium))
+        .font(.system(size: 11.5, weight: .medium))
         .foregroundStyle(Palette.flow)
         .disabled(clean.isBusy)
     }
 
-    /// The line that makes the primary button safe to press. It states the one
-    /// fact a hesitant user needs, and it changes when the guarantee changes.
     private var reassurance: some View {
         HStack(spacing: Space.md) {
             Image(systemName: clean.selectionIncludesPermanent ? "exclamationmark.triangle.fill" : "arrow.uturn.backward.circle.fill")
@@ -180,9 +182,14 @@ struct CleanView: View {
         if !clean.blockedApps.isEmpty {
             GlassCard(padding: Space.md, radius: Radius.card, tint: Palette.caution) {
                 HStack(spacing: Space.md) {
-                    Image(systemName: "pause.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Palette.caution)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Palette.caution.opacity(0.16))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "pause.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Palette.caution)
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(
                             t(
@@ -190,7 +197,7 @@ struct CleanView: View {
                                 "Quit these apps to reclaim another \(Bytes.format(clean.blockedBytes))"
                             )
                         )
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Palette.ink)
                         Text(clean.blockedApps.prefix(6).map(\.name).joined(separator: " · "))
                             .font(.system(size: 11))
@@ -207,7 +214,7 @@ struct CleanView: View {
 
     private var categoryList: some View {
         LazyVStack(spacing: Space.md) {
-            ForEach(clean.categories) { category in
+            ForEach(Array(clean.categories.enumerated()), id: \.element.id) { index, category in
                 CategoryCard(
                     category: category,
                     isExpanded: clean.expanded.contains(category.id),
@@ -222,6 +229,7 @@ struct CleanView: View {
                         clean.toggle(item: itemID, in: category.id)
                     }
                 )
+                .rises(min(index + 2, 8))
             }
         }
     }
@@ -254,20 +262,34 @@ private struct CategoryCard: View {
 
             Button(action: onToggleExpanded) {
                 HStack(spacing: Space.md) {
-                    Image(systemName: category.symbol)
-                        .font(.system(size: 15))
-                        .foregroundStyle(category.safety.tint)
-                        .frame(width: 24)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(category.safety.tint.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: category.symbol)
+                            .font(.system(size: 15))
+                            .foregroundStyle(category.safety.tint)
+                    }
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: Space.sm) {
                             Text(category.title)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 14.5, weight: .semibold))
                                 .foregroundStyle(Palette.ink)
                             SafetyChip(category.safety)
+                            if category.safety == .safe, category.flaggedCount > 0 {
+                                Text(
+                                    t(
+                                        "\(category.flaggedCount) 项需留意",
+                                        "\(category.flaggedCount) need a look"
+                                    )
+                                )
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.caution)
+                            }
                         }
                         Text(category.consequence)
-                            .font(.system(size: 11))
+                            .font(.system(size: 11.5))
                             .foregroundStyle(Palette.inkSecondary)
                             .lineLimit(1)
                     }
@@ -276,7 +298,7 @@ private struct CategoryCard: View {
 
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(Bytes.format(category.selectedSize))
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(category.selectedSize > 0 ? Palette.ink : Palette.inkTertiary)
                             .contentTransition(.numericText())
@@ -286,7 +308,7 @@ private struct CategoryCard: View {
                                 "\(category.selectedCount)/\(category.items.count) · \(Bytes.format(category.totalSize)) total"
                             )
                         )
-                        .font(.system(size: 10))
+                        .font(.system(size: 10.5))
                         .monospacedDigit()
                         .foregroundStyle(Palette.inkTertiary)
                     }
@@ -313,8 +335,6 @@ private struct CategoryCard: View {
 
     private var itemList: some View {
         LazyVStack(spacing: 0) {
-            // Long categories are truncated: nobody audits four hundred cache
-            // folders one by one, and rendering them all makes the list crawl.
             ForEach(category.items.prefix(80)) { item in
                 ItemRow(item: item, registry: registry) {
                     onToggleItem(item.id)
@@ -362,7 +382,7 @@ private struct ItemRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Space.sm) {
                     Text(item.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     if item.safety != .safe {
@@ -370,7 +390,7 @@ private struct ItemRow: View {
                     }
                 }
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -408,8 +428,6 @@ private struct ItemRow: View {
         .onHover { isHovering = $0 }
     }
 
-    /// Prefers the human explanation; falls back to the path only when there is
-    /// nothing better to say.
     private var subtitle: String {
         if let blockedBy = item.blockedBy {
             return t("\(blockedBy) 正在运行，退出后再清理", "\(blockedBy) is running — quit it first")
@@ -457,7 +475,7 @@ private struct ScanningCard: View {
                                 "Only reading sizes — nothing is changed in this step."
                             )
                         )
-                        .font(.system(size: 11))
+                        .font(.system(size: 11.5))
                         .foregroundStyle(Palette.inkSecondary)
                     }
                     Spacer()
@@ -468,28 +486,90 @@ private struct ScanningCard: View {
     }
 }
 
+// MARK: - Cleaning veil
+
+/// The full-page moment while files travel to the Trash. Honest about what it
+/// knows: the system reports one completion for the whole batch, so this shows
+/// life — rising bubbles — rather than a fabricated per-file ticker.
+private struct CleaningVeil: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            VStack(spacing: Space.lg) {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+                    let time = timeline.date.timeIntervalSinceReferenceDate
+                    Canvas { context, size in
+                        for index in 0..<22 {
+                            let seed = Double(index) * 131.7
+                            let speed = 0.16 + 0.08 * Double(index % 4)
+                            let progress = (time * speed + seed).truncatingRemainder(dividingBy: 1)
+                            let sway = sin(time * 1.4 + seed) * 9
+                            let x = size.width * (0.15 + 0.7 * ((seed / 7.3).truncatingRemainder(dividingBy: 1))) + sway
+                            let y = size.height * (1 - progress)
+                            let radius = 2.0 + Double(index % 4)
+                            let fade = min(1, min(progress / 0.15, (1 - progress) / 0.2))
+                            context.fill(
+                                Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
+                                with: .color(Palette.aqua.opacity(0.5 * fade))
+                            )
+                        }
+                    }
+                    .frame(width: 180, height: 150)
+                }
+
+                Text(t("正在把选中的内容移入废纸篓…", "Moving the selection to the Trash…"))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Palette.ink)
+                Text(t("马上就好，不用盯着。", "Almost there — no need to watch."))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.inkSecondary)
+            }
+            .padding(Space.xxl)
+            .glassPanel(radius: Radius.panel)
+        }
+    }
+}
+
 // MARK: - Result
 
+/// The payoff frame: the freed number counts up under a ring that draws itself
+/// closed, with one brief particle burst. This is the screenshot moment.
 private struct FinishedCard: View {
     let bytes: Int64
     let trashed: Int
     let erased: Int
     let onDismiss: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var start = Date()
+    @State private var settled = false
+
+    private let duration: Double = 1.1
+
     var body: some View {
         GlassCard(padding: Space.xl, tint: Palette.aqua) {
             VStack(alignment: .leading, spacing: Space.lg) {
-                HStack(alignment: .top, spacing: Space.lg) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(Palette.aqua)
+                HStack(spacing: Space.xl) {
+                    celebration
                     VStack(alignment: .leading, spacing: Space.xs) {
-                        Text(t("释放了 \(Bytes.format(bytes))", "Freed \(Bytes.format(bytes))"))
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Palette.ink)
+                        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: settled || reduceMotion)) { timeline in
+                            let elapsed = timeline.date.timeIntervalSince(start)
+                            let eased = reduceMotion ? 1 : min(1, 1 - pow(1 - min(1, elapsed / duration), 3))
+                            let shown = Int64(Double(bytes) * eased)
+                            Text(t("释放了 \(Bytes.format(shown))", "Freed \(Bytes.format(shown))"))
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.ink)
+                        }
                         Text(detail)
-                            .font(.system(size: 12))
+                            .font(.system(size: 12.5))
                             .foregroundStyle(Palette.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
@@ -507,6 +587,49 @@ private struct FinishedCard: View {
                         .buttonStyle(PrimaryButtonStyle())
                 }
             }
+        }
+        .task {
+            start = Date()
+            try? await Task.sleep(for: .seconds(duration + 0.5))
+            settled = true
+        }
+    }
+
+    private var celebration: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: settled || reduceMotion)) { timeline in
+            let elapsed = timeline.date.timeIntervalSince(start)
+            let ringProgress = reduceMotion ? 1 : min(1, elapsed / 0.7)
+
+            ZStack {
+                Circle()
+                    .stroke(Palette.aqua.opacity(0.15), lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: ringProgress)
+                    .stroke(
+                        Palette.aquaSweep,
+                        style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Palette.aqua)
+                    .scaleEffect(ringProgress >= 1 ? 1 : 0.4 + 0.6 * ringProgress)
+                    .opacity(ringProgress)
+
+                // One brief burst as the ring closes.
+                if !reduceMotion, elapsed > 0.55, elapsed < 1.2 {
+                    let burst = (elapsed - 0.55) / 0.65
+                    ForEach(0..<12, id: \.self) { index in
+                        Circle()
+                            .fill(index.isMultiple(of: 3) ? Palette.flow : Palette.aquaBright)
+                            .frame(width: 4, height: 4)
+                            .offset(y: -(26 + burst * 30))
+                            .rotationEffect(.degrees(Double(index) / 12 * 360))
+                            .opacity(1 - burst)
+                    }
+                }
+            }
+            .frame(width: 64, height: 64)
         }
     }
 

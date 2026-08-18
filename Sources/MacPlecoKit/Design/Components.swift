@@ -1,5 +1,78 @@
 import SwiftUI
 
+// MARK: - Motion primitives
+
+/// A gentle rise-and-settle on hover. Applied to cards so the interface
+/// answers the pointer without shouting.
+public struct HoverLift: ViewModifier {
+    @State private var hovering = false
+    var enabled = true
+
+    public func body(content: Content) -> some View {
+        content
+            .scaleEffect(enabled && hovering ? 1.006 : 1)
+            .shadow(
+                color: .black.opacity(enabled && hovering ? 0.10 : 0.05),
+                radius: enabled && hovering ? 20 : 12,
+                y: enabled && hovering ? 10 : 5
+            )
+            .onHover { inside in
+                guard enabled else { return }
+                withAnimation(.smooth(duration: 0.25)) { hovering = inside }
+            }
+    }
+}
+
+/// Fade-and-rise entrance, staggered by index. Sections pass 0, 1, 2… to
+/// their top-level blocks so a page assembles instead of popping.
+public struct StaggerIn: ViewModifier {
+    let index: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    public func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 16)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(.smooth(duration: 0.55).delay(Double(index) * 0.06)) {
+                    shown = true
+                }
+            }
+    }
+}
+
+extension View {
+    public func hoverLift(_ enabled: Bool = true) -> some View {
+        modifier(HoverLift(enabled: enabled))
+    }
+
+    public func rises(_ index: Int) -> some View {
+        modifier(StaggerIn(index: index))
+    }
+}
+
+// MARK: - Skeleton
+
+/// A shimmering placeholder block for content that is still being measured.
+public struct SkeletonBlock: View {
+    var radius: CGFloat = Radius.chip
+    @State private var pulse = false
+
+    public init(radius: CGFloat = Radius.chip) {
+        self.radius = radius
+    }
+
+    public var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Palette.wellFill)
+            .opacity(pulse ? 0.45 : 1)
+            .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+            .onAppear { pulse = true }
+    }
+}
+
 // MARK: - Card
 
 /// A floating pane of glass. The default container for everything that is not
@@ -8,17 +81,20 @@ public struct GlassCard<Content: View>: View {
     private let padding: CGFloat
     private let radius: CGFloat
     private let tint: Color?
+    private let lifts: Bool
     private let content: Content
 
     public init(
         padding: CGFloat = Space.lg,
         radius: CGFloat = Radius.panel,
         tint: Color? = nil,
+        lifts: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.padding = padding
         self.radius = radius
         self.tint = tint
+        self.lifts = lifts
         self.content = content()
     }
 
@@ -27,6 +103,7 @@ public struct GlassCard<Content: View>: View {
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassPanel(radius: radius, tint: tint)
+            .hoverLift(lifts)
     }
 }
 
@@ -55,10 +132,10 @@ public struct PageHeader<Trailing: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: Space.lg) {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(title)
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.ink)
                 Text(subtitle)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13.5))
                     .foregroundStyle(Palette.inkSecondary)
             }
             Spacer(minLength: Space.md)

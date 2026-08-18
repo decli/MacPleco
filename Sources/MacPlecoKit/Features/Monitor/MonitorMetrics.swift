@@ -74,6 +74,60 @@ public final class MetricsSampler {
         return (userDelta / total, systemDelta / total)
     }
 
+    // MARK: - Per-core CPU
+
+    private var lastPerCoreTicks: [[UInt64]] = []
+
+    /// Load per logical core since the previous call, each 0...1.
+    public func samplePerCoreCPU() -> [Double] {
+        var coreCount: natural_t = 0
+        var infoArray: processor_info_array_t?
+        var infoCount: mach_msg_type_number_t = 0
+
+        let result = host_processor_info(
+            mach_host_self(),
+            PROCESSOR_CPU_LOAD_INFO,
+            &coreCount,
+            &infoArray,
+            &infoCount
+        )
+        guard result == KERN_SUCCESS, let infoArray else { return [] }
+        defer {
+            vm_deallocate(
+                mach_task_self_,
+                vm_address_t(UInt(bitPattern: infoArray)),
+                vm_size_t(infoCount) * vm_size_t(MemoryLayout<integer_t>.stride)
+            )
+        }
+
+        let states = Int(CPU_STATE_MAX)
+        var loads: [Double] = []
+        var current: [[UInt64]] = []
+
+        for core in 0..<Int(coreCount) {
+            let base = core * states
+            let user = UInt64(UInt32(bitPattern: infoArray[base + Int(CPU_STATE_USER)]))
+            let system = UInt64(UInt32(bitPattern: infoArray[base + Int(CPU_STATE_SYSTEM)]))
+            let idle = UInt64(UInt32(bitPattern: infoArray[base + Int(CPU_STATE_IDLE)]))
+            let nice = UInt64(UInt32(bitPattern: infoArray[base + Int(CPU_STATE_NICE)]))
+            current.append([user, system, idle, nice])
+
+            if core < lastPerCoreTicks.count {
+                let previous = lastPerCoreTicks[core]
+                let busy = Double(user &- previous[0])
+                    + Double(system &- previous[1])
+                    + Double(nice &- previous[3])
+                let total = busy + Double(idle &- previous[2])
+                loads.append(total > 0 ? min(1, busy / total) : 0)
+            } else {
+                loads.append(0)
+            }
+        }
+
+        lastPerCoreTicks = current
+        return loads
+    }
+
     // MARK: - Memory
 
     public func sampleMemory() -> MemorySample {

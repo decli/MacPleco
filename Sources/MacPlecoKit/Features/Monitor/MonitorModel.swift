@@ -7,6 +7,7 @@ public final class MonitorModel {
 
     public private(set) var cpuUser: Double = 0
     public private(set) var cpuSystem: Double = 0
+    public private(set) var coreLoads: [Double] = []
     public private(set) var memory = MemorySample()
     public private(set) var networkIn: Double = 0
     public private(set) var networkOut: Double = 0
@@ -51,6 +52,7 @@ public final class MonitorModel {
         let cpu = sampler.sampleCPU()
         cpuUser = cpu.user
         cpuSystem = cpu.system
+        coreLoads = sampler.samplePerCoreCPU()
         memory = sampler.sampleMemory()
 
         let network = sampler.sampleNetwork()

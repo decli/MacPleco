@@ -3,6 +3,7 @@ import AppKit
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("com.macpleco.menubar") private var menuBarEnabled = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xl) {
@@ -16,30 +17,85 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 240)
-                Text(t("切换后立即生效。", "Takes effect straight away."))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.inkTertiary)
+            }
+
+            VStack(alignment: .leading, spacing: Space.sm) {
+                SectionLabel(t("外观", "Appearance"))
+                Picker("", selection: appearanceBinding) {
+                    ForEach(Appearance.allCases) { appearance in
+                        Text(appearance.title).tag(appearance)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 300)
+                Text(
+                    t(
+                        "液态玻璃在深色的水里最好看。",
+                        "Liquid Glass looks its best in dark water."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.inkTertiary)
+            }
+
+            VStack(alignment: .leading, spacing: Space.sm) {
+                SectionLabel(t("菜单栏", "Menu bar"))
+                Toggle(isOn: $menuBarEnabled) {
+                    Text(t("在菜单栏显示小鱼", "Show the fish in the menu bar"))
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.ink)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                Text(
+                    t(
+                        "随时看到剩余空间，一步进入清理。",
+                        "Free space at a glance, cleaning one click away."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.inkTertiary)
             }
 
             Divider().overlay(Palette.hairline)
 
-            VStack(alignment: .leading, spacing: Space.sm) {
-                SectionLabel(t("权限", "Permissions"))
+            HStack(spacing: Space.md) {
+                Image(systemName: model.permissions.hasFullDiskAccess ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(model.permissions.hasFullDiskAccess ? Palette.positive : Palette.caution)
+                Text(
+                    model.permissions.hasFullDiskAccess
+                        ? t("已获得完全磁盘访问权限", "Full Disk Access granted")
+                        : t("尚未获得完全磁盘访问权限", "Full Disk Access not granted")
+                )
+                .font(.system(size: 12))
+                .foregroundStyle(Palette.ink)
+                Spacer()
+                Button(t("打开设置", "Open Settings")) {
+                    model.permissions.openSettings()
+                }
+                .buttonStyle(GhostButtonStyle())
+            }
+
+            if model.ledger.totalRuns > 0 {
                 HStack(spacing: Space.md) {
-                    Image(systemName: model.permissions.hasFullDiskAccess ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(model.permissions.hasFullDiskAccess ? Palette.positive : Palette.caution)
+                    Image(systemName: "fish.fill")
+                        .foregroundStyle(Palette.aqua)
                     Text(
-                        model.permissions.hasFullDiskAccess
-                            ? t("已获得完全磁盘访问权限", "Full Disk Access granted")
-                            : t("尚未获得完全磁盘访问权限", "Full Disk Access not granted")
+                        t(
+                            "累计已腾出 \(Bytes.format(model.ledger.totalBytes)) · \(model.ledger.totalRuns) 次清理",
+                            "\(Bytes.format(model.ledger.totalBytes)) freed across \(model.ledger.totalRuns) cleans"
+                        )
                     )
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.ink)
                     Spacer()
-                    Button(t("打开设置", "Open Settings")) {
-                        model.permissions.openSettings()
+                    Button(t("清零统计", "Reset stats")) {
+                        model.ledger.reset()
                     }
-                    .buttonStyle(GhostButtonStyle())
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.inkTertiary)
                 }
             }
 
@@ -50,11 +106,12 @@ struct SettingsView: View {
             Spacer(minLength: 0)
         }
         .padding(Space.xxl)
-        .frame(width: 460, height: 420)
+        .frame(width: 480, height: 560)
         .background {
-            Palette.tankGradient.ignoresSafeArea()
+            AmbientBackground()
         }
         .id(model.language)
+        .preferredColorScheme(model.appearance.scheme)
     }
 
     private var languageBinding: Binding<Lang> {
@@ -64,13 +121,24 @@ struct SettingsView: View {
         )
     }
 
+    private var appearanceBinding: Binding<Appearance> {
+        Binding(
+            get: { model.appearance },
+            set: { model.appearance = $0 }
+        )
+    }
+
     private var about: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
-            SectionLabel(t("关于", "About"))
             HStack(spacing: Space.md) {
-                Image(systemName: "fish.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Palette.aquaSweep)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Palette.aquaSweep)
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "fish.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MacPleco \(appVersion)")
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -94,6 +162,7 @@ struct SettingsView: View {
 
             HStack(spacing: Space.lg) {
                 Link(t("项目主页", "Project page"), destination: URL(string: "https://github.com/decli/MacPleco")!)
+                Link(t("反馈问题", "Report an issue"), destination: URL(string: "https://github.com/decli/MacPleco/issues")!)
                 Link("Mole", destination: URL(string: "https://github.com/tw93/Mole")!)
             }
             .font(.system(size: 11))

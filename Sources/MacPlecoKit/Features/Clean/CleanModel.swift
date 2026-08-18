@@ -153,7 +153,7 @@ public final class CleanModel {
 
     // MARK: - Cleaning
 
-    public func clean(storage: StorageModel) async {
+    public func clean(storage: StorageModel, ledger: LedgerModel? = nil) async {
         guard selectedCount > 0, !isBusy else { return }
         phase = .cleaning
 
@@ -211,6 +211,7 @@ public final class CleanModel {
         lastFailures = failures
         permanentDelete = false
         storage.refresh()
+        ledger?.add(bytes: freed, items: trashedCount + erasedCount)
         phase = .finished(bytes: freed, trashed: trashedCount, erased: erasedCount)
     }
 

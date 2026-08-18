@@ -2,9 +2,13 @@ import Foundation
 
 /// Human-readable byte sizes.
 ///
-/// Uses decimal units (1 KB = 1000 B) to agree with Finder — a cleaner that
-/// reports 4.3 GB for what Finder calls 4.6 GB looks broken, whichever
-/// convention is technically preferable.
+/// Two conventions coexist on macOS and the app follows the system on both:
+///
+/// - **Storage** is decimal (1 KB = 1000 B), matching Finder. `format` does
+///   this.
+/// - **Memory** is binary (1 GB = 2³⁰ B), matching Activity Monitor and the
+///   spec sheet. `formatMemory` does this — it is why a 128 GB machine must
+///   never be reported as "137 GB", as the first build did.
 ///
 /// Values carry three significant digits ("4.61 GB", "21.5 MB", "275 MB"),
 /// which keeps column widths stable while staying precise enough that a user
@@ -17,12 +21,22 @@ public enum Bytes {
     }
 
     public static func format(_ value: Double) -> String {
+        scaled(value, divisor: 1000)
+    }
+
+    /// Binary-unit formatting for RAM figures. Unit labels stay "GB"/"MB"
+    /// because that is how Apple writes binary memory sizes everywhere.
+    public static func formatMemory(_ value: Int64) -> String {
+        scaled(Double(value), divisor: 1024)
+    }
+
+    private static func scaled(_ value: Double, divisor: Double) -> String {
         guard value.isFinite else { return "—" }
         let negative = value < 0
         var amount = abs(value)
         var unit = 0
-        while amount >= 1000, unit < units.count - 1 {
-            amount /= 1000
+        while amount >= divisor, unit < units.count - 1 {
+            amount /= divisor
             unit += 1
         }
 

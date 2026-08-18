@@ -182,6 +182,23 @@ def lerp(a, b, t):
     return a + (b - a) * t
 
 
+def light_rays(size):
+    """Two soft shafts of light angling down from the upper left."""
+    def quad(points):
+        path = Path()
+        path.move(*points[0])
+        for point in points[1:]:
+            path.line(*point)
+        return path
+
+    def scaled(points):
+        return [(x * size, y * size) for (x, y) in points]
+
+    wide = quad(scaled([(0.30, -0.05), (0.52, -0.05), (0.30, 1.05), (0.12, 1.05)]))
+    slim = quad(scaled([(0.58, -0.05), (0.70, -0.05), (0.52, 1.05), (0.42, 1.05)]))
+    return rasterize([wide], size), rasterize([slim], size)
+
+
 def render(size):
     half = BODY * size / 2.0
     center = size / 2.0
@@ -199,6 +216,22 @@ def render(size):
             max(0.9, 0.036 * fish_scale),
         )
     ], size)
+    eye_glint = rasterize([
+        circle(
+            fish_ox + 0.253 * fish_scale,
+            fish_oy + 0.505 * fish_scale,
+            max(0.5, 0.012 * fish_scale),
+        )
+    ], size)
+
+    # Bubbles rising from the snout.
+    bubbles = rasterize([
+        circle(fish_ox + 0.155 * fish_scale, fish_oy + 0.360 * fish_scale, max(0.8, 0.020 * fish_scale)),
+        circle(fish_ox + 0.205 * fish_scale, fish_oy + 0.265 * fish_scale, max(0.6, 0.014 * fish_scale)),
+        circle(fish_ox + 0.165 * fish_scale, fish_oy + 0.180 * fish_scale, max(0.5, 0.009 * fish_scale)),
+    ], size)
+
+    ray_wide, ray_slim = light_rays(size)
 
     pixels = bytearray()
     for y in range(size):
@@ -206,13 +239,22 @@ def render(size):
         v = y / max(1, size - 1)
         for x in range(size):
             index = y * size + x
+            u = x / max(1, size - 1)
 
             # Deep water: lit near the surface, near-black at the floor, with a
             # gentle diagonal lift so the face is not flat.
-            diagonal = (x / max(1, size - 1)) * 0.35 + (1 - v) * 0.65
+            diagonal = u * 0.35 + (1 - v) * 0.65
             r = lerp(6, 34, diagonal ** 1.35)
             g = lerp(20, 96, diagonal ** 1.2)
             b = lerp(38, 122, diagonal ** 1.1)
+
+            # Light shafts, fading with depth.
+            ray = ray_wide[index] * 0.10 + ray_slim[index] * 0.07
+            if ray > 0:
+                fade = max(0.0, 1.0 - v * 1.1)
+                r = lerp(r, 210, ray * fade)
+                g = lerp(g, 240, ray * fade)
+                b = lerp(b, 250, ray * fade)
 
             # Fish: bright aqua, brighter along its top edge.
             cover = body[index]
@@ -228,6 +270,21 @@ def render(size):
                 r = lerp(r, 8, eye[index])
                 g = lerp(g, 26, eye[index])
                 b = lerp(b, 44, eye[index])
+            if eye_glint[index] > 0:
+                r = lerp(r, 235, eye_glint[index] * 0.9)
+                g = lerp(g, 250, eye_glint[index] * 0.9)
+                b = lerp(b, 250, eye_glint[index] * 0.9)
+
+            bubble = bubbles[index] * max(0.0, 1.0 - cover)
+            if bubble > 0:
+                r = lerp(r, 205, bubble * 0.55)
+                g = lerp(g, 242, bubble * 0.55)
+                b = lerp(b, 238, bubble * 0.55)
+
+            # Corner vignette for depth.
+            dx, dy = u - 0.5, v - 0.5
+            dim = 1.0 - 0.20 * min(1.0, (dx * dx + dy * dy) * 2.6)
+            r, g, b = r * dim, g * dim, b * dim
 
             alpha = shell[index]
             pixels.extend((

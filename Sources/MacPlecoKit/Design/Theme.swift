@@ -61,9 +61,28 @@ extension Color {
 public enum Palette {
 
     // Window ground — a vertical descent from shallow to deep water.
-    public static let abyss = Color.adaptive(light: 0xE7EEF6, dark: 0x050B14)
-    public static let deep = Color.adaptive(light: 0xF1F6FB, dark: 0x0A1626)
-    public static let shallow = Color.adaptive(light: 0xFAFCFE, dark: 0x102437)
+    //
+    // The light values are deliberately tinted rather than near-white: the
+    // first build's light mode was so pale that glass had nothing to refract
+    // and the whole interface read as flat paper.
+    public static let abyss = Color.adaptive(light: 0xD3E2F0, dark: 0x050B14)
+    public static let deep = Color.adaptive(light: 0xE2EDF7, dark: 0x0A1626)
+    public static let shallow = Color.adaptive(light: 0xEFF5FA, dark: 0x102437)
+
+    // The four drifting colour fields behind everything (see AmbientBackground).
+    // Opacity is baked in so the Canvas can fill them directly.
+    public static let auroraAqua = Color.adaptive(
+        light: 0x53D6C1, dark: 0x0E6B60, lightOpacity: 0.42, darkOpacity: 0.42
+    )
+    public static let auroraSky = Color.adaptive(
+        light: 0x74B2F2, dark: 0x1B3F78, lightOpacity: 0.40, darkOpacity: 0.46
+    )
+    public static let auroraViolet = Color.adaptive(
+        light: 0xA495EC, dark: 0x33306B, lightOpacity: 0.30, darkOpacity: 0.40
+    )
+    public static let auroraWarm = Color.adaptive(
+        light: 0xF4C6A4, dark: 0x14586E, lightOpacity: 0.26, darkOpacity: 0.36
+    )
 
     // Brand accents.
     /// Clean water. Reserved for affirmative, safe, "go" meaning.

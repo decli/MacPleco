@@ -12,10 +12,10 @@ struct AppsView: View {
         Page(destination: .apps, trailing: AnyView(tabPicker)) {
             switch apps.tab {
             case .installed:
-                installedControls
+                installedControls.rises(0)
                 installedList
             case .startup:
-                startupIntro
+                startupIntro.rises(0)
                 startupList
             }
         }
@@ -202,17 +202,17 @@ private struct AppRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                 HStack(spacing: Space.sm) {
                     if !app.version.isEmpty {
                         Text(app.version)
-                            .font(.system(size: 10))
+                            .font(.system(size: 10.5))
                             .foregroundStyle(Palette.inkTertiary)
                     }
                     Text(lastUsedText)
-                        .font(.system(size: 10))
+                        .font(.system(size: 10.5))
                         .foregroundStyle(idleTint)
                 }
             }

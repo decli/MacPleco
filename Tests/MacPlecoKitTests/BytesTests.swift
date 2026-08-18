@@ -39,4 +39,19 @@ final class BytesTests: XCTestCase {
         XCTAssertEqual(parts.number, "512")
         XCTAssertEqual(parts.unit, "B")
     }
+
+    // MARK: - Memory (binary) units
+
+    func testMemoryUsesBinaryUnitsLikeActivityMonitor() {
+        // The regression that shipped: 128 GiB of RAM reported as "137 GB".
+        XCTAssertEqual(Bytes.formatMemory(Int64(137_438_953_472)), "128 GB")
+        XCTAssertEqual(Bytes.formatMemory(Int64(8_589_934_592)), "8.00 GB")
+        XCTAssertEqual(Bytes.formatMemory(Int64(1_048_576)), "1.00 MB")
+        XCTAssertEqual(Bytes.formatMemory(Int64(1_572_864)), "1.50 MB")
+        XCTAssertEqual(Bytes.formatMemory(Int64(512)), "512 B")
+    }
+
+    func testStorageStaysDecimalLikeFinder() {
+        XCTAssertEqual(Bytes.format(Int64(2_000_000_000_000)), "2.00 TB")
+    }
 }

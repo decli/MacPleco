@@ -67,7 +67,9 @@ public enum TuneCatalog {
                     "Rebuilds the font database, fixing tofu boxes and broken font menus."
                 ),
                 warning: t("建议之后重启一次相关应用。", "Reopen affected apps afterwards."),
-                symbol: "textformat",
+                // Not "textformat": that symbol localises to CJK characters in
+                // Chinese, where it reads as stray text instead of an icon.
+                symbol: "character.square",
                 action: .command(path: "/usr/bin/atsutil", arguments: ["databases", "-removeUser"])
             ),
             TuneTask(
