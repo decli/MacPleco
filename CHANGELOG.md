@@ -7,6 +7,31 @@ page.
 这里记录 MacPleco 的主要变化。安装制品与完整双语说明请见
 [Releases](https://github.com/decli/MacPleco/releases) 页面。
 
+## [0.3.5] - 2026-08-20
+
+### Fixed · 修复
+
+- A stat card can no longer be widened by its own contents. The memory card's
+  three-part legend wanted 245pt inside a card that had 217pt, so the card grew
+  past its column and pushed into both neighbouring gutters — which is why the
+  gap before the last card looked bigger than the rest. Measured across window
+  sizes, all four cards are now identical in width with identical gaps.
+- Legends give way instead: normal gutters, then tight gutters, then swatch and
+  reading only, whichever is the widest that fits.
+- The space map's readout is now derived from where the pointer actually is,
+  rather than from whichever tile last saw a hover event. Tiles that re-lay out
+  under a still cursor — a folder finishing its measurement, or drilling into
+  the next level — can no longer leave the header naming one item while the
+  cursor rests on another.
+
+- 指标卡片不会再被自身内容撑宽。内存卡片的三段图例需要 245pt，而卡片只有 217pt，于是
+  卡片越出所在列、挤进两侧的间距——这正是最后一张卡片间距看起来更大的原因。多种窗口
+  宽度下实测：四张卡片现在宽度一致、间距一致。
+- 图例改为逐级让步：正常间距 → 紧凑间距 → 只保留色块与数值，取能放下的最宽一种。
+- 空间地图的读数改为由指针位置实时判定，不再依赖“哪个色块最后收到过悬停事件”。指针
+  不动而色块重排时（某个文件夹刚测量完成，或进入下一层），标题栏不会再显示指针并未
+  指向的项目。
+
 ## [0.3.4] - 2026-08-20
 
 ### Added · 新增

@@ -56,6 +56,12 @@ struct MonitorView: View {
     /// Four live vitals, all built from the same card so the row is one height.
     /// Each carries a legend, because every one of them is really two or three
     /// quantities and a single colour cannot say which is which.
+    ///
+    /// The legend slot is 30pt rather than the 13pt one line needs: at four
+    /// columns the memory card's three entries only keep their labels over two
+    /// lines, and the slot is declared per card, so every card reserves the
+    /// room the widest legend can ask for. That is what keeps the row one
+    /// height — see `LegendRow`.
     private var gauges: some View {
         StatCardGrid(minimum: 236) {
             StatCard(
@@ -65,18 +71,17 @@ struct MonitorView: View {
                 detail: coreDetail,
                 tint: monitor.cpuTotal > 0.85 ? Palette.caution : Palette.chartTeal,
                 chartHeight: 32,
-                extraHeight: 22
+                extraHeight: 30
             ) {
                 Sparkline([
                     .init(values: monitor.cpuUserHistory, color: Palette.chartTeal),
                     .init(values: monitor.cpuSystemHistory, color: Palette.chartViolet, filled: false)
                 ])
             } extra: {
-                HStack(spacing: Space.md) {
-                    LegendDot(Palette.chartTeal, t("应用", "Apps"), value: percent(monitor.cpuUser))
-                    LegendDot(Palette.chartViolet, t("系统", "System"), value: percent(monitor.cpuSystem))
-                    Spacer(minLength: 0)
-                }
+                LegendRow([
+                    .init(Palette.chartTeal, t("应用", "Apps"), value: percent(monitor.cpuUser)),
+                    .init(Palette.chartViolet, t("系统", "System"), value: percent(monitor.cpuSystem))
+                ])
             }
 
             StatCard(
@@ -89,7 +94,7 @@ struct MonitorView: View {
                 ),
                 tint: monitor.memory.usedFraction > 0.9 ? Palette.caution : Palette.chartBlue,
                 chartHeight: 32,
-                extraHeight: 22
+                extraHeight: 30
             ) {
                 // A stacked bar rather than a plain fill: "used" is three
                 // different things, and which one is growing changes what you
@@ -100,12 +105,19 @@ struct MonitorView: View {
                     Spacer(minLength: 0)
                 }
             } extra: {
-                HStack(spacing: Space.md) {
-                    LegendDot(Palette.chartBlue, t("应用", "Apps"), value: Bytes.formatMemory(appMemory))
-                    LegendDot(Palette.chartViolet, t("系统占用", "Wired"), value: Bytes.formatMemory(monitor.memory.wired))
-                    LegendDot(Palette.chartAmber, t("压缩", "Compressed"), value: Bytes.formatMemory(monitor.memory.compressed))
-                    Spacer(minLength: 0)
-                }
+                LegendRow([
+                    .init(Palette.chartBlue, t("应用", "Apps"), value: Bytes.formatMemory(appMemory)),
+                    .init(
+                        Palette.chartViolet,
+                        t("系统占用", "Wired"),
+                        value: Bytes.formatMemory(monitor.memory.wired)
+                    ),
+                    .init(
+                        Palette.chartAmber,
+                        t("压缩", "Compressed"),
+                        value: Bytes.formatMemory(monitor.memory.compressed)
+                    )
+                ])
             }
 
             StatCard(
@@ -116,24 +128,23 @@ struct MonitorView: View {
                 tint: Palette.chartViolet,
                 progress: monitor.gpu.device,
                 chartHeight: 32,
-                extraHeight: 22
+                extraHeight: 30
             ) {
                 Sparkline(values: monitor.gpuHistory, tint: Palette.chartViolet)
             } extra: {
-                HStack(spacing: Space.md) {
-                    if monitor.gpu.isAvailable {
-                        LegendDot(
+                if monitor.gpu.isAvailable {
+                    LegendRow([
+                        .init(
                             Palette.chartViolet,
                             t("渲染", "Renderer"),
                             value: percent(monitor.gpu.renderer ?? 0)
-                        )
-                        LegendDot(
+                        ),
+                        .init(
                             Palette.chartTeal,
                             t("分块", "Tiler"),
                             value: percent(monitor.gpu.tiler ?? 0)
                         )
-                    }
-                    Spacer(minLength: 0)
+                    ])
                 }
             }
 
@@ -144,26 +155,25 @@ struct MonitorView: View {
                 detail: networkDetail,
                 tint: Palette.chartTeal,
                 chartHeight: 32,
-                extraHeight: 22
+                extraHeight: 30
             ) {
                 Sparkline([
                     .init(values: monitor.networkInHistory, color: Palette.chartTeal),
                     .init(values: monitor.networkOutHistory, color: Palette.chartAmber, filled: false)
                 ])
             } extra: {
-                HStack(spacing: Space.md) {
-                    LegendDot(
+                LegendRow([
+                    .init(
                         Palette.chartTeal,
                         t("下载", "Down"),
                         value: "\(Bytes.format(monitor.networkIn))/s"
-                    )
-                    LegendDot(
+                    ),
+                    .init(
                         Palette.chartAmber,
                         t("上传", "Up"),
                         value: "\(Bytes.format(monitor.networkOut))/s"
                     )
-                    Spacer(minLength: 0)
-                }
+                ])
             }
         }
     }

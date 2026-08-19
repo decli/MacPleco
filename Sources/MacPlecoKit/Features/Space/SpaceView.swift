@@ -11,6 +11,18 @@ struct SpaceView: View {
     /// highlight the pointer is still sitting on.
     @State private var hovered: String?
     @State private var hoverSource: HoverSource?
+
+    /// Where the pointer is inside the map, in the map's own coordinates.
+    ///
+    /// The map's highlight is derived from this position against the tiles as
+    /// they are laid out *now*, rather than remembered from whichever tile
+    /// last saw an `onHover`. A tile only hears about the pointer when the
+    /// pointer crosses its edge, so anything that moves tiles underneath a
+    /// still cursor — a folder finishing its measurement, drilling into the
+    /// next level — used to leave the old tile holding the highlight while
+    /// the cursor sat on a different one. Position cannot go stale that way:
+    /// when the layout changes, the answer is simply recomputed.
+    @State private var mapPointer: CGPoint?
     @State private var pendingTrash: SpaceEntry?
     @State private var pendingLargeTrash: LargeFile?
 
@@ -230,6 +242,11 @@ struct SpaceView: View {
                 values: visible.map(\.size),
                 in: CGRect(origin: .zero, size: geo.size)
             )
+            let pointed = pointedItem(in: visible, rects: rects)
+            // The Top 12 cards below the map share this highlight, so pointing
+            // at a card lights its tile up here. The pointer's own answer wins
+            // whenever it has one.
+            let highlighted = pointed ?? (hoverSource == .list ? hovered : nil)
 
             ZStack(alignment: .topLeading) {
                 if visible.isEmpty {
@@ -242,7 +259,7 @@ struct SpaceView: View {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
                     let rect = rects[index]
                     if rect.width > 4, rect.height > 4 {
-                        tile(item: item, rect: rect, rank: index)
+                        tile(item: item, rect: rect, rank: index, isHovered: highlighted == item.id)
                             .transition(.scale(scale: 0.92).combined(with: .opacity))
                     }
                 }
@@ -252,6 +269,34 @@ struct SpaceView: View {
             // entire treemap by half the leftover width — the source of the
             // old blank left half and right-edge overflow.
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            // Hover is tracked on the sized, filled container rather than on
+            // the stack of tiles: a `ZStack` is only hit-testable where its
+            // children are, and the tiles are `.offset` into place, so the
+            // gaps between them — and the map's own margins — would report
+            // nothing. `.local` is then exactly the space the tile rects were
+            // laid out in, so a reported location can be tested against them
+            // directly.
+            .contentShape(Rectangle())
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let location):
+                    let snapped = CGPoint(x: location.x.rounded(), y: location.y.rounded())
+                    if snapped != mapPointer { mapPointer = snapped }
+                case .ended:
+                    mapPointer = nil
+                }
+            }
+            // Publishing the derived answer is what keeps the header readout
+            // and the tile under the cursor from ever disagreeing: they are
+            // now the same value, not two things updated separately.
+            .onChange(of: pointed, initial: true) { _, id in
+                if let id {
+                    hovered = id
+                    hoverSource = .map
+                } else if hoverSource == .map {
+                    clearHover()
+                }
+            }
             .animation(.smooth(duration: 0.45), value: space.entries)
         }
         .frame(maxWidth: .infinity)
@@ -266,19 +311,23 @@ struct SpaceView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
-        // A tile only hears about the pointer leaving when the pointer leaves
-        // *it*. Slide off the edge of the map, or drill into a folder under
-        // the cursor, and the last tile keeps the highlight and the header
-        // keeps reading out a tile nothing is pointing at.
-        .onHover { inside in
-            if !inside, hoverSource == .map { clearHover() }
-        }
-        .onChange(of: space.currentURL) { clearHover() }
     }
 
     private func clearHover() {
         hovered = nil
         hoverSource = nil
+    }
+
+    /// The item under the pointer, decided by position rather than by
+    /// whichever tile last received a hover event. Tiles are laid out
+    /// largest-first and never overlap, so the first rectangle containing the
+    /// point is the answer.
+    private func pointedItem(in items: [DiskMapItem], rects: [CGRect]) -> String? {
+        guard let mapPointer else { return nil }
+        guard let index = rects.firstIndex(where: { $0.contains(mapPointer) }),
+              index < items.count
+        else { return nil }
+        return items[index].id
     }
 
     /// The heavy items remain individually readable while the long tail is
@@ -370,8 +419,7 @@ struct SpaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func tile(item: DiskMapItem, rect: CGRect, rank: Int) -> some View {
-        let isHovered = hovered == item.id
+    private func tile(item: DiskMapItem, rect: CGRect, rank: Int, isHovered: Bool) -> some View {
         let showLabel = rect.width > 92 && rect.height > 50
         let prominent = rect.width > 250 && rect.height > 125
 
@@ -411,14 +459,6 @@ struct SpaceView: View {
             .offset(x: rect.minX, y: rect.minY)
             .scaleEffect(isHovered ? 1.012 : 1, anchor: .center)
             .animation(.smooth(duration: 0.2), value: isHovered)
-            .onHover { inside in
-                if inside {
-                    hovered = item.id
-                    hoverSource = .map
-                } else if hovered == item.id {
-                    clearHover()
-                }
-            }
             .onTapGesture {
                 if let entry = item.entry {
                     if entry.isDirectory {

@@ -482,27 +482,41 @@ public struct StatCard<Chart: View, Extra: View>: View {
                     .minimumScaleFactor(0.6)
                     .frame(height: 29, alignment: .leading)
 
-                // `ZStack` with a clear floor rather than the content alone:
-                // it holds the slot's height even when what goes in it is an
-                // `EmptyView`.
+                // A clear floor holds each slot's height even when what goes
+                // in it is an `EmptyView` — and the content rides in an
+                // *overlay* rather than a `ZStack`, which is what keeps the
+                // card inside its column. A `ZStack` is as wide as its widest
+                // child: measured in a 249pt column, the memory legend's 252pt
+                // in Chinese made the card 296pt and its 287pt in English made
+                // it 331pt, spilling 47 and 82pt into the gutters either side
+                // and running the card's own detail line into its neighbour's.
+                // An overlay never contributes to layout, so the slot is
+                // exactly the width it was given, no matter what goes in it or
+                // in which language.
                 if let chartHeight {
-                    ZStack { Color.clear; chart }
+                    Color.clear
                         .frame(height: chartHeight)
+                        .overlay { chart }
                 }
 
                 if let extraHeight {
-                    ZStack { Color.clear; extra }
+                    Color.clear
                         .frame(height: extraHeight)
+                        // Top, not centre: the slot is tall enough for a
+                        // legend that wraps to two lines, and a one-line
+                        // legend centred in it would sit lower than a wrapped
+                        // one on the card beside it.
+                        .overlay(alignment: .top) { extra }
                 }
 
                 if reservesProgress {
-                    ZStack {
-                        Color.clear
-                        if let progress {
-                            CapacityBar(fraction: progress, tint: tint, height: 4)
+                    Color.clear
+                        .frame(height: 4)
+                        .overlay {
+                            if let progress {
+                                CapacityBar(fraction: progress, tint: tint, height: 4)
+                            }
                         }
-                    }
-                    .frame(height: 4)
                 }
 
                 Text(detail)
@@ -626,10 +640,10 @@ public struct StatCardGrid<Content: View>: View {
 /// carries these, so the colours are decodable instead of decorative.
 public struct LegendDot: View {
     private let color: Color
-    private let label: String
+    private let label: String?
     private let value: String?
 
-    public init(_ color: Color, _ label: String, value: String? = nil) {
+    public init(_ color: Color, _ label: String?, value: String? = nil) {
         self.color = color
         self.label = label
         self.value = value
@@ -640,18 +654,101 @@ public struct LegendDot: View {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(color)
                 .frame(width: 7, height: 7)
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.inkTertiary)
+            if let label {
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.inkTertiary)
+                    .lineLimit(1)
+            }
             if let value {
                 Text(value)
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(color)
                     .contentTransition(.numericText())
+                    .lineLimit(1)
+                    // The reading is the point of the legend; if the row runs
+                    // out of room the key gives way first, never the number.
+                    .layoutPriority(1)
             }
         }
-        .fixedSize()
+        // Deliberately not `.fixedSize()`. A legend that refuses to compress
+        // does not stay legible — it drags its card out of the grid. See
+        // `LegendRow`, which is how a row of these is meant to be built.
+    }
+}
+
+/// A row of legend entries that gives way instead of pushing its card wider.
+///
+/// Measured in an `NSHostingView`, in both languages: the memory card's three
+/// entries want 287pt in English and 252pt in Chinese, and the four-column
+/// grid this row lives in gives a card 204–244pt inside its padding. So the
+/// row has four forms — normal gutters, tight gutters, two lines, and swatch
+/// with reading only — and takes the first that fits.
+///
+/// Wrapping earns its place: dropping straight from one line to swatches took
+/// every label off the memory card at every four-column width in English and
+/// all but the very widest in Chinese, which is the common case on a large
+/// display, not an edge. Wrapped, the same entries need 167pt and every label
+/// survives at every width the window can reach. The swatch-only form stays
+/// as the floor below that; it is still decodable, because the swatch colours
+/// are the colours of the chart immediately above it.
+public struct LegendRow: View {
+    public struct Entry: Identifiable {
+        public let id: String
+        fileprivate let color: Color
+        fileprivate let label: String
+        fileprivate let value: String?
+
+        public init(_ color: Color, _ label: String, value: String? = nil) {
+            self.id = label
+            self.color = color
+            self.label = label
+            self.value = value
+        }
+    }
+
+    private let entries: [Entry]
+
+    public init(_ entries: [Entry]) {
+        self.entries = entries
+    }
+
+    public var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row(spacing: Space.md, showsLabels: true)
+            row(spacing: Space.sm, showsLabels: true)
+            wrapped
+            row(spacing: Space.sm, showsLabels: false)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(spacing: CGFloat, showsLabels: Bool) -> some View {
+        HStack(spacing: spacing) {
+            ForEach(entries) { entry in
+                LegendDot(entry.color, showsLabels ? entry.label : nil, value: entry.value)
+            }
+        }
+    }
+
+    /// The same entries over two lines, the first taking the ceiling half.
+    /// Two lines measure 28pt, so a card that wants this form has to reserve
+    /// an `extraHeight` of at least that — see the gauges in `MonitorView`.
+    private var wrapped: some View {
+        let split = (entries.count + 1) / 2
+        return VStack(alignment: .leading, spacing: 2) {
+            line(Array(entries.prefix(split)))
+            line(Array(entries.dropFirst(split)))
+        }
+    }
+
+    private func line(_ entries: [Entry]) -> some View {
+        HStack(spacing: Space.sm) {
+            ForEach(entries) { entry in
+                LegendDot(entry.color, entry.label, value: entry.value)
+            }
+        }
     }
 }
 
