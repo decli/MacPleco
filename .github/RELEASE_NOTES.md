@@ -1,66 +1,77 @@
-MacPleco 0.3.3 — a monitor that can hold still, a space map that uses its space,
-and exact paths before you remove a large file.
+MacPleco 0.3.4 — uninstall in batches, a monitor that reports the machine
+instead of describing itself, and folder measurement three to seven times
+faster.
 
-MacPleco 0.3.3 —— 监控数据可以动、位置可以不动；空间地图真正铺满空间；清理大文件前
-先看清准确路径。
+MacPleco 0.3.4 —— 批量卸载、监控页只报数据不解释自己，文件夹体积测量快 3–7 倍。
 
-### Sortable process monitor · 可排序的进程监控
+### Batch uninstall · 批量卸载
 
-- Click the CPU, GPU or Memory column to choose the ranking metric.
-- **Live order** continuously moves rows as usage changes; **Fixed positions**
-  keeps existing processes in place while their values refresh, filling a row
-  only when its process exits.
-- CPU, memory, network and Mac information cards now share the same dimensions
-  and information slots.
-- macOS does not expose other processes' live GPU percentage through a public,
-  unprivileged API. The GPU column therefore reports an honest “—” with an
-  explanation instead of substituting CPU or energy data, using a private API,
-  or asking for administrator access.
+- Tick several apps and remove them together. One review sheet lists every
+  bundle and every leftover it found, and each line can still be declined
+  individually before anything moves.
+- Every app row carries a visible **Uninstall** button, and every Tune-Up
+  repair a visible **Run** button, instead of revealing them on hover.
+- Login items can be sorted by name, by scope or by what actually runs at
+  login, and searched.
 
-- 单击 CPU、GPU 或内存列即可选择排序指标。
-- “实时排序”会随占用变化移动行；“固定位置”只刷新数值，原进程退出后才补入新进程。
-- CPU、内存、网络和 Mac 信息卡片采用相同尺寸与信息槽位，不再高低不一。
-- macOS 没有向普通 App 公开其他进程的实时 GPU 百分比，因此 GPU 列会明确显示“—”和
-  原因，不用 CPU 或能耗冒充，也不调用私有接口、不索要管理员权限。
+- 勾选多个应用即可一起卸载。清单里逐条列出每个本体与每一处残留，动手之前仍可逐项取消。
+- 应用行常驻“卸载”按钮，优化项常驻“执行”按钮，不再需要悬停才出现。
+- 开机启动项支持按名称、范围或“开机即启动”排序，并支持搜索。
 
-### A space map that fills its canvas · 真正铺满画布的空间地图
+### Folder measurement, 3–7× faster · 文件夹测量快 3–7 倍
 
-- Fixed the coordinate-origin bug that shifted the whole treemap right, leaving
-  a blank left half and pushing tiles beyond the window edge.
-- The map is now a stable full-width visualisation with adaptive, larger labels,
-  percentages, folder/file legends and breadcrumbs.
-- The largest 12 items appear in responsive cards below the map. Hovering a card
-  and its tile refers to the same item, and every card includes its exact path
-  and a Finder button.
-- Small items are consolidated into one honest “Other items” tile instead of
-  becoming a field of unreadable slivers.
+Sizes are now read with `getattrlistbulk` — a whole batch of directory entries
+and their allocated sizes in one syscall — and the walk is shared across a
+work-stealing pool, so the whole machine finishes the one enormous folder
+instead of leaving it to a single thread. A 417 GB home folder drops from 17.9s
+to 3.1s and `~/Library` from 17.8s to 2.5s, reporting the same byte totals as
+before.
 
-- 修复了坐标原点错误：旧版会把整张矩阵树图向右二次居中，造成左侧大片空白、右侧越界。
-- 地图改为稳定的全宽布局，提供更大的自适应字号、占比、文件夹/文件图例和面包屑导航。
-- 地图下方新增响应式 Top 12 卡片；卡片和区块悬停联动，并显示准确路径与访达按钮。
-- 小项目会合并成诚实的“其他项目”区块，不再挤成无法阅读、无法点击的碎片。
+体积测量改用 `getattrlistbulk`：一次系统调用即可取回一批目录项及其占用大小；遍历
+交给工作窃取线程池，整台机器一起完成最大的那个文件夹，而不是留给单线程。417 GB
+的个人文件夹从 17.9 秒降到 3.1 秒，`~/Library` 从 17.8 秒降到 2.5 秒，字节总数与
+此前完全一致。
 
-### Safer large-file review · 更安全的大文件确认
+### A monitor that reports · 只报数据的监控页
 
-- Every large-file row now shows its absolute path directly under the name.
-- An always-visible Finder button reveals and selects the exact file before any
-  cleanup decision.
-- Right-click adds **Show in Finder**, **Copy Full Path** and the reversible
-  **Move to Trash** action.
+- Whole-device GPU utilisation, read from the IORegistry.
+- The process table can be searched by name, path or pid, filtered to apps or
+  system processes, sorted by name, memory, start time or CPU in either
+  direction, revealed in Finder, and asked to quit — or forced to.
+- CPU, memory, GPU and network each plot their components in distinct colours
+  with a legend, rather than blending two or three quantities into one line.
+- All four gauges now carry the same kind of subtitle — cores, installed
+  memory, video memory in use, peak rate — instead of two of them explaining
+  how their own chart was drawn.
 
-- 每个大文件都会在名称下方显示绝对路径。
-- 常驻的“访达”按钮会打开所在目录并选中准确文件，方便清理前核对。
-- 右键菜单新增“在访达中显示”“复制完整路径”和可撤销的“移到废纸篓”。
+- 新增整机 GPU 使用率，数据来自 IORegistry。
+- 进程表支持按名称/路径/PID 搜索，区分应用与系统进程，按名称/内存/启动时间/CPU 正反序
+  排序，在访达中定位，以及请求退出或强制结束。
+- CPU、内存、GPU、网络各自用不同颜色绘制其组成部分并配图例，不再把两三个量混成一根线。
+- 四张卡片的副标题统一为同类读数——核心数、内存容量、显存占用、峰值速率，不再有两张
+  卡片在解释自己的曲线是怎么画的。
 
-### Real language switching · 真正的语言切换
+### Cards that line up, tiles that mean something · 对齐的卡片与有含义的色块
 
-The interleaved bilingual README has been replaced by a focused English
-`README.md` and Simplified Chinese `README.zh-CN.md`, linked at the top of both
-documents. A cumulative `CHANGELOG.md` is included in the repository.
+- A row of four stat cards no longer breaks as three with one stranded
+  underneath, and no longer stops short of the right edge. The grid counts its
+  cards rather than filling the container with as many columns as fit, so the
+  cards either share one row or split evenly across two.
+- Space map tiles are coloured by identity, not by size rank: the area of a
+  tile already says how big it is. Ten muted folder hues say which folder it
+  is, loose files keep one warm tone of their own so “one huge file” never
+  looks like “a folder of many things”, and the grouped tail stays neutral
+  grey.
+- The map no longer keeps a tile lit, and reading it out in the header, after
+  the pointer has left the map or moved into another folder.
 
-原先逐段中英对照的 README 已拆成专注的英文 `README.md` 和简体中文
-`README.zh-CN.md`，两份文档顶部均可一键切换；仓库同时新增累计更新日志
-`CHANGELOG.md`。
+- 四张指标卡片不再出现“上排三张、下面孤零零一张”的换行，也不再在右侧留出一整列空白：
+  网格按卡片数量分列，因此四张卡片要么同处一行，要么均分两行。
+- 空间地图的色彩表示“是哪一项”，不再表示大小——面积已经说明了大小。十种低饱和文件夹色
+  负责区分身份，散落的文件保留自己的暖色，“一个超大文件”不会看起来像“一个装满东西的
+  文件夹”，合并的其他项保持中性灰。
+- 指针移出地图或进入下一层文件夹后，地图不再保留高亮，标题栏也不再继续读出一个指针
+  并未指向的项目。
 
 ### Install · 安装
 

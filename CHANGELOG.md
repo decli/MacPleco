@@ -7,6 +7,77 @@ page.
 这里记录 MacPleco 的主要变化。安装制品与完整双语说明请见
 [Releases](https://github.com/decli/MacPleco/releases) 页面。
 
+## [0.3.4] - 2026-08-20
+
+### Added · 新增
+
+- Batch uninstall: tick several apps and review one sheet listing every bundle
+  and every leftover, each still individually declinable.
+- A permanently visible uninstall button on every app row, and a permanently
+  visible Run button on every Tune-Up repair, plus select-all bars on both.
+- Login items can be sorted by name, by scope, or by which ones run at login,
+  and searched.
+- Process table: search by name, path or pid; filter to apps or system
+  processes; sort by name, memory, start time or CPU in either direction;
+  reveal in Finder; and quit or force quit a process.
+- Whole-device GPU utilisation, read from the IORegistry.
+
+- 批量卸载：勾选多个应用后在一张清单里查看每个本体与每一处残留，仍可逐项取消。
+- 应用行常驻“卸载”按钮，优化项常驻“执行”按钮，两个页面都新增全选栏。
+- 开机启动项支持按名称、范围或“开机即启动”排序，并支持搜索。
+- 进程表支持按名称/路径/PID 搜索、区分应用与系统进程、按名称/内存/启动时间/CPU 正反序
+  排序、在访达中定位，以及请求退出或强制结束。
+- 新增整机 GPU 使用率，数据来自 IORegistry。
+
+### Changed · 改进
+
+- Folder measurement now uses `getattrlistbulk` and a work-stealing pool, so
+  the whole machine finishes the one enormous folder instead of leaving it to a
+  single thread. A 417 GB home folder drops from 17.9s to 3.1s and `~/Library`
+  from 17.8s to 2.5s, reporting the same totals as before.
+- Overview and Monitor share one stat card whose slots are reserved whether or
+  not they are filled, so a row of cards is equal-height by construction.
+- CPU, memory, GPU and network each plot their components in distinct colours
+  with a legend, rather than blending two or three quantities into one line.
+- Per-core bars and the machine's static details moved out of the metric grid
+  into their own strip.
+- The four monitor gauges now carry parallel readings — cores, installed
+  memory, video memory in use, peak rate — in place of two subtitles that
+  explained how their own chart was drawn.
+- Space map tiles are coloured by identity rather than by size rank. Area
+  already says how big something is; ten muted folder hues say which folder it
+  is, files keep one warm tone of their own, and the grouped tail stays grey.
+
+- 文件夹体积测量改用 `getattrlistbulk` 与工作窃取线程池，整台机器一起完成最大的那个
+  文件夹，而不是留给单线程。417 GB 的个人文件夹从 17.9 秒降到 3.1 秒，`~/Library`
+  从 17.8 秒降到 2.5 秒，统计结果与此前一致。
+- 概览页与监控页共用同一种指标卡片，未使用的插槽也会占位，因此同一行卡片天然等高。
+- CPU、内存、GPU、网络各自用不同颜色绘制其组成部分并配图例，不再把两三个量混成一根线。
+- 每核心负载条与机器静态信息移出指标网格，独立成条。
+- 监控页四张卡片的副标题统一为同类读数——核心数、内存容量、显存占用、峰值速率，
+  不再用两句话解释自己的曲线是怎么画的。
+- 空间地图的色彩改为表示“是哪一项”，不再表示大小：面积已经说明了大小，十种低饱和
+  文件夹色负责区分身份，文件保留自己的暖色，合并的其他项保持中性灰。
+
+### Fixed · 修复
+
+- Cards on the Overview and Monitor pages no longer render at different heights
+  and sit centred against one another.
+- The always-empty per-process GPU column is gone; the space now carries process
+  start time, which is a number that exists.
+- Four stat cards no longer break as a row of three with one card stranded
+  underneath, and no longer stop short of the right edge. The grid counts its
+  cards instead of filling the container with as many columns as fit.
+- The space map no longer keeps a tile highlighted, and reading it out in the
+  header, after the pointer has left the map or moved into another folder.
+
+- 概览页与监控页的卡片不再高度不一、互相居中错位。
+- 移除永远为空的“每进程 GPU”列，该位置改为显示确实存在的进程启动时间。
+- 四张指标卡片不再出现“上排三张、下面孤零零一张”的换行，也不再在右侧留出一整列空白：
+  网格按卡片数量分列，而不是按容器能塞下多少列。
+- 指针移出空间地图或进入下一层文件夹后，地图不再保留高亮，标题栏也不再继续读出
+  一个指针并未指向的项目。
+
 ## [0.3.3] - 2026-08-19
 
 ### Added · 新增

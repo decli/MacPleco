@@ -3,17 +3,25 @@ import Observation
 
 public enum ProcessSortMetric: String, CaseIterable, Identifiable, Sendable {
     case cpu
-    case gpu
     case memory
+    case started
+    case name
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
         case .cpu: return "CPU"
-        case .gpu: return "GPU"
         case .memory: return t("内存", "Memory")
+        case .started: return t("启动", "Started")
+        case .name: return t("进程", "Process")
         }
+    }
+
+    /// The direction that answers the question the column is usually asked.
+    /// "Busiest" means most CPU, but "started" means most recently launched.
+    var defaultsToAscending: Bool {
+        self == .name
     }
 }
 
@@ -31,6 +39,36 @@ public enum ProcessOrderMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Which processes to show.
+///
+/// The split exists because the two groups answer different questions: "which
+/// of my apps is eating the battery" and "what is macOS doing in the
+/// background". Mixed together, the system's dozens of daemons bury the
+/// handful of rows a person can actually act on.
+public enum ProcessScope: String, CaseIterable, Identifiable, Sendable {
+    case all
+    case apps
+    case system
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .all: return t("全部", "All")
+        case .apps: return t("应用", "Apps")
+        case .system: return t("系统", "System")
+        }
+    }
+
+    func admits(_ process: ProcessSample) -> Bool {
+        switch self {
+        case .all: return true
+        case .apps: return !process.isSystem
+        case .system: return process.isSystem
+        }
+    }
+}
+
 @Observable
 @MainActor
 public final class MonitorModel {
@@ -41,27 +79,48 @@ public final class MonitorModel {
     public private(set) var memory = MemorySample()
     public private(set) var networkIn: Double = 0
     public private(set) var networkOut: Double = 0
+    public private(set) var gpu = GPUSample()
     public private(set) var processes: [ProcessSample] = []
 
     public var processSort: ProcessSortMetric = .cpu {
+        didSet {
+            guard processSort != oldValue else { return }
+            sortAscending = processSort.defaultsToAscending
+            rebuildProcessList(reseedFixed: true)
+        }
+    }
+
+    /// Clicking the active column header flips it, which is how every table on
+    /// this platform behaves.
+    public var sortAscending = false {
         didSet { rebuildProcessList(reseedFixed: true) }
     }
+
     public var processOrder: ProcessOrderMode = .live {
         didSet { rebuildProcessList(reseedFixed: processOrder == .fixed) }
     }
 
-    /// `nil` GPU readings are intentional rather than a sampling failure: the
-    /// public APIs available to a normal Mac app do not expose other apps'
-    /// real-time GPU percentages. The UI explains this instead of fabricating
-    /// a number or asking for administrator access.
-    public var hasPerProcessGPU: Bool {
-        rawProcesses.contains { $0.gpu != nil }
+    public var scope: ProcessScope = .all {
+        didSet { rebuildProcessList(reseedFixed: true) }
     }
 
-    /// Rolling windows for the sparklines, newest last.
-    public private(set) var cpuHistory: [Double] = []
+    /// Matches process name, executable path or pid.
+    public var query = "" {
+        didSet { rebuildProcessList(reseedFixed: true) }
+    }
+
+    /// The result of the last force-quit, shown briefly beside the table.
+    public var lastOutcome: (message: String, succeeded: Bool)?
+
+    /// Rolling windows for the sparklines, newest last. User and system CPU are
+    /// kept apart, and so are download and upload, because a single blended
+    /// line cannot be read back into its parts.
+    public private(set) var cpuUserHistory: [Double] = []
+    public private(set) var cpuSystemHistory: [Double] = []
     public private(set) var memoryHistory: [Double] = []
-    public private(set) var networkHistory: [Double] = []
+    public private(set) var networkInHistory: [Double] = []
+    public private(set) var networkOutHistory: [Double] = []
+    public private(set) var gpuHistory: [Double] = []
 
     public private(set) var isStreaming = false
 
@@ -72,9 +131,20 @@ public final class MonitorModel {
     private var fixedProcessIDs: [Int32] = []
 
     private let historyLength = 70
-    private let processLimit = 12
+    private let restingLimit = 12
+    private let searchingLimit = 40
 
     public init() {}
+
+    /// A search is a request to see everything that matches, not the top
+    /// twelve of it.
+    private var processLimit: Int {
+        query.trimmingCharacters(in: .whitespaces).isEmpty ? restingLimit : searchingLimit
+    }
+
+    public var matchCount: Int {
+        filtered(rawProcesses).count
+    }
 
     /// Sampling only runs while something is watching — the Monitor section or
     /// the menu bar panel. Reference-counted, because both can be open at once
@@ -112,9 +182,15 @@ public final class MonitorModel {
         networkIn = network.received
         networkOut = network.sent
 
-        append(&cpuHistory, cpu.user + cpu.system)
+        let graphics = MetricsSampler.sampleGPU()
+        gpu = graphics
+
+        append(&cpuUserHistory, cpu.user)
+        append(&cpuSystemHistory, cpu.system)
         append(&memoryHistory, memory.usedFraction)
-        append(&networkHistory, network.received + network.sent)
+        append(&networkInHistory, network.received)
+        append(&networkOutHistory, network.sent)
+        append(&gpuHistory, graphics.device ?? 0)
 
         // Activity Monitor defaults to a five-second cadence. Three seconds is
         // responsive enough to watch a process move without burning CPU just
@@ -133,48 +209,99 @@ public final class MonitorModel {
         rebuildProcessList(reseedFixed: false)
     }
 
+    // MARK: - Ending a process
+
+    /// Ends a process and refreshes the table so the row disappears rather
+    /// than lingering as a ghost until the next sample.
+    public func end(_ process: ProcessSample, force: Bool) async {
+        let outcome = ProcessControl.end(pid: process.pid, force: force)
+        lastOutcome = (
+            outcome.succeeded
+                ? t("\(process.name)：\(outcome.message)", "\(process.name): \(outcome.message)")
+                : outcome.message,
+            outcome.succeeded
+        )
+
+        guard outcome.succeeded else { return }
+        // A graceful quit is not instant; give it a moment before re-reading.
+        try? await Task.sleep(for: .milliseconds(force ? 150 : 600))
+        let snapshot = await Task.detached(priority: .userInitiated) {
+            MetricsSampler.sampleProcesses()
+        }.value
+        fixedProcessIDs.removeAll { $0 == process.pid }
+        applyProcessSnapshot(snapshot)
+    }
+
+    public func clearOutcome() {
+        lastOutcome = nil
+    }
+
+    // MARK: - List assembly
+
+    private func filtered(_ samples: [ProcessSample]) -> [ProcessSample] {
+        var result = samples.filter { scope.admits($0) }
+
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return result }
+
+        result = result.filter { process in
+            process.name.localizedCaseInsensitiveContains(trimmed)
+                || process.path.localizedCaseInsensitiveContains(trimmed)
+                || String(process.pid).hasPrefix(trimmed)
+        }
+        return result
+    }
+
     /// Live mode re-sorts every snapshot. Fixed mode keeps existing rows in
     /// place, removes processes that exited, and fills empty slots with the
-    /// busiest newcomers. Switching metric deliberately takes one fresh sort
-    /// before freezing the new order.
+    /// busiest newcomers. Changing metric, direction, scope or search
+    /// deliberately takes one fresh sort before freezing the new order.
     private func rebuildProcessList(reseedFixed: Bool) {
-        let sorted = sortedProcesses(rawProcesses)
+        let sorted = sortedProcesses(filtered(rawProcesses))
+        let limit = processLimit
 
         guard processOrder == .fixed, !reseedFixed else {
-            processes = Array(sorted.prefix(processLimit))
+            processes = Array(sorted.prefix(limit))
             fixedProcessIDs = processOrder == .fixed ? processes.map(\.pid) : []
             return
         }
 
-        let byPID = Dictionary(uniqueKeysWithValues: rawProcesses.map { ($0.pid, $0) })
-        var ids = fixedProcessIDs.filter { byPID[$0] != nil }
+        let admitted = Dictionary(sorted.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        var ids = fixedProcessIDs.filter { admitted[$0] != nil }
         let retained = Set(ids)
         ids.append(contentsOf: sorted.lazy.map(\.pid).filter { !retained.contains($0) })
-        fixedProcessIDs = Array(ids.prefix(processLimit))
-        processes = fixedProcessIDs.compactMap { byPID[$0] }
+        fixedProcessIDs = Array(ids.prefix(limit))
+        processes = fixedProcessIDs.compactMap { admitted[$0] }
     }
 
     private func sortedProcesses(_ samples: [ProcessSample]) -> [ProcessSample] {
         samples.sorted { lhs, rhs in
+            let ordered: Bool
             switch processSort {
             case .cpu:
-                if lhs.cpu != rhs.cpu { return lhs.cpu > rhs.cpu }
+                if lhs.cpu == rhs.cpu { return tieBreak(lhs, rhs) }
+                ordered = lhs.cpu > rhs.cpu
             case .memory:
-                if lhs.memory != rhs.memory { return lhs.memory > rhs.memory }
-            case .gpu:
-                switch (lhs.gpu, rhs.gpu) {
-                case let (left?, right?) where left != right:
-                    return left > right
-                case (_?, nil):
-                    return true
-                case (nil, _?):
-                    return false
-                default:
-                    break
-                }
+                if lhs.memory == rhs.memory { return tieBreak(lhs, rhs) }
+                ordered = lhs.memory > rhs.memory
+            case .started:
+                let left = lhs.started ?? .distantPast
+                let right = rhs.started ?? .distantPast
+                if left == right { return tieBreak(lhs, rhs) }
+                ordered = left > right
+            case .name:
+                let comparison = lhs.name.localizedStandardCompare(rhs.name)
+                if comparison == .orderedSame { return lhs.pid < rhs.pid }
+                // `.name` defaults to ascending, so its natural order is
+                // already A→Z; the flag below flips it like the others.
+                ordered = comparison == .orderedDescending
             }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            return sortAscending ? !ordered : ordered
         }
+    }
+
+    private func tieBreak(_ lhs: ProcessSample, _ rhs: ProcessSample) -> Bool {
+        lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
     }
 
     private func append(_ series: inout [Double], _ value: Double) {

@@ -126,3 +126,83 @@ public enum Uninstaller {
         return await Removal.trash(urls, sizes: sizes, policy: .uninstall)
     }
 }
+
+/// Several uninstalls reviewed as one operation.
+///
+/// The single-app sheet exists so nothing is removed unseen; a batch must keep
+/// that promise rather than trade it for convenience. So this is still a list
+/// of complete plans — every bundle, every leftover, every size — and any app
+/// or any individual leftover inside it can still be declined before the one
+/// confirmation at the end.
+public struct BatchUninstallPlan: Identifiable, Sendable {
+    public var id: String
+    public var plans: [UninstallPlan]
+    /// Apps the user unticked in the sheet, by bundle identifier.
+    public var excluded: Set<String> = []
+
+    public init(plans: [UninstallPlan]) {
+        self.plans = plans
+        self.id = plans.map(\.id).joined(separator: "|")
+    }
+
+    public var selectedPlans: [UninstallPlan] {
+        plans.filter { !excluded.contains($0.id) }
+    }
+
+    public var appCount: Int { selectedPlans.count }
+
+    public var totalSize: Int64 {
+        selectedPlans.reduce(0) { $0 + $1.totalSize }
+    }
+
+    public var leftoverCount: Int {
+        selectedPlans.reduce(0) { $0 + $1.selectedLeftovers.count }
+    }
+
+    public func includes(_ id: String) -> Bool {
+        !excluded.contains(id)
+    }
+}
+
+extension Uninstaller {
+
+    /// Builds one plan per app.
+    ///
+    /// Several at a time, because a dozen `/Applications` walks run strictly
+    /// one after another is exactly the pause that makes a batch feel broken.
+    /// The window is small on purpose: each plan already spreads its own walk
+    /// across a worker pool, so letting every app start at once would just have
+    /// the pools fight each other for the disk.
+    public static func batchPlan(
+        for apps: [InstalledApp],
+        onProgress: (@MainActor (Int) -> Void)? = nil
+    ) async -> BatchUninstallPlan {
+        guard !apps.isEmpty else { return BatchUninstallPlan(plans: []) }
+
+        var plans = await withTaskGroup(of: (Int, UninstallPlan).self) { group in
+            let window = min(3, apps.count)
+            var next = 0
+            while next < window {
+                let index = next
+                group.addTask { (index, await plan(for: apps[index])) }
+                next += 1
+            }
+
+            var collected: [(Int, UninstallPlan)] = []
+            while let result = await group.next() {
+                collected.append(result)
+                await onProgress?(collected.count)
+                if next < apps.count {
+                    let index = next
+                    group.addTask { (index, await plan(for: apps[index])) }
+                    next += 1
+                }
+            }
+            return collected.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+
+        // Biggest first: the reason to review a batch is to see what it frees.
+        plans.sort { $0.totalSize > $1.totalSize }
+        return BatchUninstallPlan(plans: plans)
+    }
+}

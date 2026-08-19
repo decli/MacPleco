@@ -140,11 +140,8 @@ struct OverviewView: View {
     // MARK: - Insight cards
 
     private var insights: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 224), spacing: Space.md)],
-            spacing: Space.md
-        ) {
-            InsightCard(
+        StatCardGrid(minimum: 224) {
+            StatCard(
                 symbol: "internaldrive",
                 label: t("磁盘", "Disk"),
                 value: Bytes.format(storage.available),
@@ -152,11 +149,11 @@ struct OverviewView: View {
                     "可用 · 共 \(Bytes.format(storage.total))",
                     "free of \(Bytes.format(storage.total))"
                 ),
-                progress: storage.usedFraction,
-                tint: storage.usedFraction > 0.9 ? Palette.caution : Palette.aqua
+                tint: storage.usedFraction > 0.9 ? Palette.caution : Palette.aqua,
+                progress: storage.usedFraction
             )
 
-            InsightCard(
+            StatCard(
                 symbol: "square.stack.3d.up",
                 label: t("已安装应用", "Installed apps"),
                 value: "\(model.registry.apps.filter { !$0.isSystem }.count)",
@@ -164,7 +161,7 @@ struct OverviewView: View {
                 tint: Palette.flow
             )
 
-            InsightCard(
+            StatCard(
                 symbol: "clock",
                 label: t("已运行", "Uptime"),
                 value: RelativeTime.duration(SystemInfo.uptime),
@@ -172,7 +169,7 @@ struct OverviewView: View {
                 tint: Palette.flow
             )
 
-            InsightCard(
+            StatCard(
                 symbol: "cpu",
                 label: t("芯片", "Chip"),
                 value: chipName,
@@ -231,60 +228,6 @@ struct OverviewView: View {
                     }
                 }
                 Spacer(minLength: 0)
-            }
-        }
-    }
-}
-
-// MARK: - Insight card
-
-struct InsightCard: View {
-    let symbol: String
-    let label: String
-    let value: String
-    let detail: String
-    var progress: Double?
-    var tint: Color = Palette.aqua
-    var badge: String?
-
-    var body: some View {
-        GlassCard(padding: Space.lg, radius: Radius.card, lifts: true) {
-            VStack(alignment: .leading, spacing: Space.sm) {
-                HStack(spacing: Space.sm) {
-                    Image(systemName: symbol)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(tint)
-                    Text(label)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(Palette.inkTertiary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    if let badge {
-                        Text(badge)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(tint)
-                            .padding(.horizontal, Space.sm)
-                            .padding(.vertical, 2.5)
-                            .background { Capsule().fill(tint.opacity(0.14)) }
-                    }
-                }
-
-                Text(value)
-                    .font(.system(size: 23, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                if let progress {
-                    CapacityBar(fraction: progress, tint: tint, height: 4)
-                }
-
-                Text(detail)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Palette.inkSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

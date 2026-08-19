@@ -28,6 +28,28 @@ public final class TuneModel {
         }
     }
 
+    public var allSelected: Bool {
+        !tasks.isEmpty && selected.count == tasks.count
+    }
+
+    public func toggleSelectAll() {
+        if allSelected {
+            selected.removeAll()
+        } else {
+            selected = Set(tasks.map(\.id))
+        }
+    }
+
+    public func clearSelection() {
+        selected.removeAll()
+    }
+
+    /// Clears the outcome badges without touching the ticks, for when the page
+    /// has accumulated a screenful of "Done" from earlier runs.
+    public func clearResults() {
+        results.removeAll()
+    }
+
     public func runSelected() async {
         guard !selected.isEmpty, !isRunning else { return }
         isRunning = true

@@ -96,6 +96,7 @@ struct SidebarColumn: View {
                 Text(Bytes.format(storage.available))
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                     .foregroundStyle(Palette.ink)
             }
             CapacityBar(
@@ -156,6 +157,12 @@ struct DetailHost: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Sections cross-fade rather than cutting. A plain fade, not a slide:
+        // each page already assembles itself with a staggered rise, and two
+        // motions layered on one another reads as busy instead of smooth.
+        .id(model.destination)
+        .transition(.opacity)
+        .animation(.smooth(duration: 0.28), value: model.destination)
     }
 }
 

@@ -97,6 +97,46 @@ public enum Palette {
     public static let danger = Color.adaptive(light: 0xCE3B36, dark: 0xFF7A72)
     public static let positive = Color.adaptive(light: 0x1C8A4E, dark: 0x4ADE80)
 
+    // Chart series.
+    //
+    // Picked to differ in lightness as well as hue, so two series stay
+    // separable in light mode, in dark mode, and for the most common forms of
+    // colour-vision deficiency — where teal against blue would not be.
+    public static let chartTeal = Color.adaptive(light: 0x0B8F84, dark: 0x38D9C4)
+    public static let chartViolet = Color.adaptive(light: 0x6D3BD1, dark: 0xB794F6)
+    public static let chartAmber = Color.adaptive(light: 0xB4530A, dark: 0xFBA94C)
+    public static let chartBlue = Color.adaptive(light: 0x1F6BD4, dark: 0x5AA6F8)
+
+    // Treemap tiles.
+    //
+    // A tile's area already says how big it is, so colour is free to say
+    // *which* thing it is: ten muted folder hues instead of one ramp that
+    // repeated the size in a second channel. The order is deliberate —
+    // neighbouring indices sit far apart on the wheel, and because tiles are
+    // laid out largest first, index adjacency is visual adjacency.
+    public static let folderTones: [Color] = [
+        .adaptive(light: 0x0F8A80, dark: 0x17A093),
+        .adaptive(light: 0xB0603C, dark: 0xC4724A),
+        .adaptive(light: 0x5A5FB5, dark: 0x6E74CC),
+        .adaptive(light: 0x5C8A33, dark: 0x6DA33F),
+        .adaptive(light: 0xB25070, dark: 0xC46184),
+        .adaptive(light: 0x17809A, dark: 0x1F97B4),
+        .adaptive(light: 0xA2762A, dark: 0xB98A33),
+        .adaptive(light: 0x8B5AA8, dark: 0xA06CBF),
+        .adaptive(light: 0x2E8F63, dark: 0x37A876),
+        .adaptive(light: 0x2A6FB8, dark: 0x3684D1)
+    ]
+
+    /// Loose files stay out of the folder palette entirely, in one desaturated
+    /// warm tone: "one huge file" and "a folder of many things" must never
+    /// look like each other. Red is not used here — it stays reserved for
+    /// danger, and a large file is not dangerous.
+    public static let fileTone = Color.adaptive(light: 0x937A52, dark: 0xA68A5E)
+
+    /// The consolidated long tail is deliberately colourless. It is not one
+    /// thing, so it should not look like one.
+    public static let tailTone = Color.adaptive(light: 0x6B7580, dark: 0x77828E)
+
     // Text.
     public static let ink = Color.adaptive(light: 0x0B1826, dark: 0xF3F8FC)
     public static let inkSecondary = Color.veil(0.66, light: 0.62)

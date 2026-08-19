@@ -1,5 +1,7 @@
 import Foundation
 import Darwin
+import IOKit
+import AppKit
 
 public struct MemorySample: Sendable {
     public var total: Int64 = 0
@@ -17,22 +19,147 @@ public struct MemorySample: Sendable {
 public struct ProcessSample: Identifiable, Sendable, Hashable {
     public var id: Int32 { pid }
     public let pid: Int32
+    /// What to call it in the table: the innermost `.app` bundle name when the
+    /// executable lives in one, otherwise the executable's own name.
     public let name: String
+    /// Absolute path to the executable. Empty only when `ps` could not report
+    /// one, which happens for a handful of kernel-side entries.
+    public let path: String
     public let cpu: Double
-    /// Per-process GPU utilisation is deliberately optional. macOS exposes
-    /// live GPU counters for work submitted by *this* process through Metal,
-    /// but has no public, unprivileged API for inspecting every other process.
-    /// Keeping the value optional avoids turning energy or CPU time into a
-    /// made-up "GPU %" while leaving the table ready for a future public API.
-    public let gpu: Double?
     public let memory: Int64
+    public let uid: uid_t
+    public let started: Date?
 
-    public init(pid: Int32, name: String, cpu: Double, gpu: Double? = nil, memory: Int64) {
+    /// Owned by the system rather than by the person using the Mac.
+    ///
+    /// Two signals, because either alone is wrong: accounts below uid 500 are
+    /// reserved by macOS for daemons, and anything running out of the read-only
+    /// system volume belongs to the OS even when it runs as you — the Finder
+    /// and the Dock are yours to use but not yours to manage.
+    public var isSystem: Bool {
+        if uid < 500 { return true }
+        return Self.systemPrefixes.contains { path.hasPrefix($0) }
+    }
+
+    private static let systemPrefixes = [
+        "/System/", "/usr/", "/sbin/", "/bin/", "/Library/Apple/"
+    ]
+
+    /// What "Show in Finder" should select: the app bundle if there is one, so
+    /// the user lands on Chrome rather than on a binary buried six folders
+    /// deep inside it.
+    public var revealURL: URL? {
+        guard !path.isEmpty else { return nil }
+        if let bundle = Self.enclosingBundle(of: path) {
+            return URL(fileURLWithPath: bundle)
+        }
+        return URL(fileURLWithPath: path)
+    }
+
+    public init(
+        pid: Int32,
+        name: String,
+        path: String = "",
+        cpu: Double,
+        memory: Int64,
+        uid: uid_t = 0,
+        started: Date? = nil
+    ) {
         self.pid = pid
         self.name = name
+        self.path = path
         self.cpu = cpu
-        self.gpu = gpu
         self.memory = memory
+        self.uid = uid
+        self.started = started
+    }
+
+    /// The innermost `.app` on the path. Innermost rather than outermost so a
+    /// browser's renderer helper is named after the helper — which is the row
+    /// you would want to identify — instead of collapsing into the browser.
+    static func enclosingBundle(of path: String) -> String? {
+        guard let range = path.range(of: ".app/", options: .backwards) else {
+            return path.hasSuffix(".app") ? path : nil
+        }
+        return String(path[path.startIndex..<range.lowerBound]) + ".app"
+    }
+
+    static func displayName(forPath path: String) -> String {
+        guard !path.isEmpty else { return "?" }
+        if let bundle = enclosingBundle(of: path) {
+            return (bundle as NSString).lastPathComponent
+                .replacingOccurrences(of: ".app", with: "")
+        }
+        return (path as NSString).lastPathComponent
+    }
+}
+
+/// Whole-device GPU load.
+///
+/// Per-*process* GPU is a different question and macOS has no public answer to
+/// it: there are no `IOAccelCommandQueue` entries carrying a pid on Apple
+/// silicon, and the only tool that can attribute GPU time to a process
+/// (`powermetrics`) needs root. The device totals below, however, are plain
+/// IORegistry properties any app may read — so the page reports those instead
+/// of a column that could only ever be empty.
+public struct GPUSample: Sendable, Equatable {
+    public var device: Double?
+    public var renderer: Double?
+    public var tiler: Double?
+    public var inUseMemory: Int64?
+
+    public var isAvailable: Bool { device != nil }
+}
+
+/// Ending a process, with the same reversibility instinct as the rest of the
+/// app: ask politely first, and only insist when told to.
+public enum ProcessControl {
+
+    public enum Outcome: Sendable {
+        case asked
+        case forced
+        /// The process belongs to another user — almost always root. Ending it
+        /// would need administrator rights, which this app does not take.
+        case denied
+        case gone
+
+        public var message: String {
+            switch self {
+            case .asked:
+                return t("已请求退出", "Asked it to quit")
+            case .forced:
+                return t("已强制结束", "Force quit")
+            case .denied:
+                return t(
+                    "这个进程属于系统账户，需要管理员权限才能结束。",
+                    "This process belongs to a system account and needs administrator rights to end."
+                )
+            case .gone:
+                return t("这个进程已经不在了", "That process is already gone")
+            }
+        }
+
+        public var succeeded: Bool {
+            self == .asked || self == .forced
+        }
+    }
+
+    /// GUI apps are asked through `NSRunningApplication`, which gives them the
+    /// chance to save open documents. Everything else gets a signal.
+    @MainActor
+    public static func end(pid: Int32, force: Bool) -> Outcome {
+        if let running = NSRunningApplication(processIdentifier: pid) {
+            let ok = force ? running.forceTerminate() : running.terminate()
+            if ok { return force ? .forced : .asked }
+        }
+
+        let result = kill(pid, force ? SIGKILL : SIGTERM)
+        if result == 0 { return force ? .forced : .asked }
+        switch errno {
+        case EPERM: return .denied
+        case ESRCH: return .gone
+        default: return .denied
+        }
     }
 }
 
@@ -223,7 +350,15 @@ public final class MetricsSampler {
     public static func sampleProcesses(limit: Int? = nil) -> [ProcessSample] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-Aceo", "pid,pcpu,rss,comm", "-r"]
+        // `-ww` stops long executable paths being truncated to the terminal
+        // width, and dropping `-c` is what makes `comm` report the full path
+        // rather than just a name — that path is what powers "Show in Finder",
+        // the system/app split and the icon lookup.
+        //
+        // `etime` is chosen over `lstart` deliberately: it is a single
+        // whitespace-free token, so the columns stay unambiguously splittable
+        // even though command paths contain spaces.
+        process.arguments = ["-Awwxo", "pid=,pcpu=,rss=,uid=,etime=,comm="]
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -239,25 +374,101 @@ public final class MetricsSampler {
         process.waitUntilExit()
 
         let text = String(decoding: data, as: UTF8.self)
+        let now = Date()
         var results: [ProcessSample] = []
 
-        for line in text.split(separator: "\n").dropFirst() {
-            // Command names contain spaces ("Google Chrome"), so only the three
-            // leading numeric columns are split off.
+        for line in text.split(separator: "\n") {
+            // Only the five leading numeric columns are split off; whatever
+            // follows is the path, spaces and all.
             let fields = line.split(separator: " ", omittingEmptySubsequences: true)
-            guard fields.count >= 4,
+            guard fields.count >= 6,
                   let pid = Int32(fields[0]),
                   let cpu = Double(fields[1]),
-                  let rss = Int64(fields[2])
+                  let rss = Int64(fields[2]),
+                  let uid = UInt32(fields[3])
             else { continue }
 
-            let name = fields.dropFirst(3).joined(separator: " ")
+            let path = fields.dropFirst(5).joined(separator: " ")
+            let started = elapsedSeconds(fields[4]).map { now.addingTimeInterval(-$0) }
+
             results.append(
-                ProcessSample(pid: pid, name: name, cpu: cpu, memory: rss * 1024)
+                ProcessSample(
+                    pid: pid,
+                    name: ProcessSample.displayName(forPath: path),
+                    path: path,
+                    cpu: cpu,
+                    memory: rss * 1024,
+                    uid: uid_t(uid),
+                    started: started
+                )
             )
             if let limit, results.count >= limit { break }
         }
 
         return results
+    }
+
+    /// Parses `ps` elapsed time — `[[dd-]hh:]mm:ss` — into seconds.
+    private static func elapsedSeconds(_ text: Substring) -> TimeInterval? {
+        var days: Double = 0
+        var remainder = text
+
+        if let dash = remainder.firstIndex(of: "-") {
+            days = Double(remainder[remainder.startIndex..<dash]) ?? 0
+            remainder = remainder[remainder.index(after: dash)...]
+        }
+
+        let parts = remainder.split(separator: ":").map { Double($0) }
+        guard !parts.isEmpty, parts.allSatisfy({ $0 != nil }) else { return nil }
+
+        // Each column to the left is worth sixty of the one to its right.
+        var seconds: Double = 0
+        for part in parts { seconds = seconds * 60 + (part ?? 0) }
+        return days * 86_400 + seconds
+    }
+
+    // MARK: - GPU
+
+    /// Whole-device GPU load, read straight from the IORegistry.
+    ///
+    /// Every accelerator publishes a `PerformanceStatistics` dictionary; on a
+    /// machine with more than one GPU the busiest is reported, which is what
+    /// "how hard is the graphics hardware working" means to a user.
+    public static func sampleGPU() -> GPUSample {
+        var sample = GPUSample()
+
+        guard let matching = IOServiceMatching("IOAccelerator") else { return sample }
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS
+        else { return sample }
+        defer { IOObjectRelease(iterator) }
+
+        while case let entry = IOIteratorNext(iterator), entry != 0 {
+            defer { IOObjectRelease(entry) }
+
+            guard let property = IORegistryEntryCreateCFProperty(
+                entry, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0
+            ), let statistics = property.takeRetainedValue() as? [String: Any] else { continue }
+
+            func share(_ key: String) -> Double? {
+                guard let raw = statistics[key] as? NSNumber else { return nil }
+                return min(1, max(0, raw.doubleValue / 100))
+            }
+
+            if let device = share("Device Utilization %") {
+                sample.device = max(sample.device ?? 0, device)
+            }
+            if let renderer = share("Renderer Utilization %") {
+                sample.renderer = max(sample.renderer ?? 0, renderer)
+            }
+            if let tiler = share("Tiler Utilization %") {
+                sample.tiler = max(sample.tiler ?? 0, tiler)
+            }
+            if let memory = statistics["In use system memory"] as? NSNumber {
+                sample.inUseMemory = max(sample.inUseMemory ?? 0, memory.int64Value)
+            }
+        }
+
+        return sample
     }
 }

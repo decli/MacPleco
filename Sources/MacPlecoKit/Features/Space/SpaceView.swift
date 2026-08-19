@@ -4,7 +4,13 @@ import AppKit
 struct SpaceView: View {
     @Environment(AppModel.self) private var model
 
+    /// Which tile or card the pointer is on, and which of the two set it.
+    /// The source matters: the map and the list below it share one highlight
+    /// so they stay linked, and without knowing who is holding it, the map's
+    /// own exit event can arrive after the list's enter event and wipe out a
+    /// highlight the pointer is still sitting on.
     @State private var hovered: String?
+    @State private var hoverSource: HoverSource?
     @State private var pendingTrash: SpaceEntry?
     @State private var pendingLargeTrash: LargeFile?
 
@@ -184,22 +190,37 @@ struct SpaceView: View {
             }
 
             HStack(spacing: Space.md) {
-                mapLegend(color: Palette.aqua, label: t("文件夹", "Folders"))
-                mapLegend(color: Palette.caution, label: t("文件", "Files"))
+                // Three swatches for folders, because folders are no longer one
+                // colour: the legend has to say "any of these" rather than
+                // name a hue the map never uses twice.
+                mapLegend(colors: Array(Palette.folderTones.prefix(3)), label: t("文件夹", "Folders"))
+                mapLegend(colors: [Palette.fileTone], label: t("文件", "Files"))
+                if hasTail {
+                    mapLegend(colors: [Palette.tailTone], label: t("其他项合计", "Other items"))
+                }
             }
         }
         .padding(.horizontal, Space.xs)
     }
 
-    private func mapLegend(color: Color, label: String) -> some View {
+    private func mapLegend(colors: [Color], label: String) -> some View {
         HStack(spacing: 5) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(color)
-                .frame(width: 9, height: 9)
+            HStack(spacing: 2) {
+                ForEach(Array(colors.enumerated()), id: \.offset) { _, color in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(color)
+                        .frame(width: 9, height: 9)
+                }
+            }
             Text(label)
                 .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(Palette.inkTertiary)
         }
+    }
+
+    /// Whether the long tail was consolidated into its own grey tile.
+    private var hasTail: Bool {
+        mapItems.contains { $0.entry == nil }
     }
 
     private var map: some View {
@@ -221,7 +242,7 @@ struct SpaceView: View {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
                     let rect = rects[index]
                     if rect.width > 4, rect.height > 4 {
-                        tile(item: item, rect: rect, rank: index, of: visible.count)
+                        tile(item: item, rect: rect, rank: index)
                             .transition(.scale(scale: 0.92).combined(with: .opacity))
                     }
                 }
@@ -245,6 +266,19 @@ struct SpaceView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
+        // A tile only hears about the pointer leaving when the pointer leaves
+        // *it*. Slide off the edge of the map, or drill into a folder under
+        // the cursor, and the last tile keeps the highlight and the header
+        // keeps reading out a tile nothing is pointing at.
+        .onHover { inside in
+            if !inside, hoverSource == .map { clearHover() }
+        }
+        .onChange(of: space.currentURL) { clearHover() }
+    }
+
+    private func clearHover() {
+        hovered = nil
+        hoverSource = nil
     }
 
     /// The heavy items remain individually readable while the long tail is
@@ -336,13 +370,13 @@ struct SpaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func tile(item: DiskMapItem, rect: CGRect, rank: Int, of count: Int) -> some View {
+    private func tile(item: DiskMapItem, rect: CGRect, rank: Int) -> some View {
         let isHovered = hovered == item.id
         let showLabel = rect.width > 92 && rect.height > 50
         let prominent = rect.width > 250 && rect.height > 125
 
         return RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(tileColor(item: item, rank: rank, of: count).gradient)
+            .fill(tileColor(item: item, rank: rank).gradient)
             .overlay {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .strokeBorder(
@@ -377,7 +411,14 @@ struct SpaceView: View {
             .offset(x: rect.minX, y: rect.minY)
             .scaleEffect(isHovered ? 1.012 : 1, anchor: .center)
             .animation(.smooth(duration: 0.2), value: isHovered)
-            .onHover { hovered = $0 ? item.id : (hovered == item.id ? nil : hovered) }
+            .onHover { inside in
+                if inside {
+                    hovered = item.id
+                    hoverSource = .map
+                } else if hovered == item.id {
+                    clearHover()
+                }
+            }
             .onTapGesture {
                 if let entry = item.entry {
                     if entry.isDirectory {
@@ -390,21 +431,18 @@ struct SpaceView: View {
             .contextMenu {
                 if let entry = item.entry { contextMenu(for: entry) }
             }
-            .help("\(item.name) · \(Bytes.format(item.size)) · \(mapShare(item.size))")
     }
 
-    /// Colour carries meaning: depth of aqua tracks size rank — the biggest
-    /// tiles are the deepest water — and loose files surface in warm tones so
-    /// "one huge file" and "a folder of many things" never look alike.
-    private func tileColor(item: DiskMapItem, rank: Int, of count: Int) -> Color {
-        guard let entry = item.entry else { return Palette.inkFaint }
-        if !entry.isDirectory {
-            return rank < max(1, count / 3) ? Palette.danger : Palette.caution
-        }
-        let position = count <= 1 ? 0 : Double(rank) / Double(count - 1)
-        let ramp: [Color] = [Palette.aquaDeep, Palette.aqua, Palette.flow, Palette.flow.opacity(0.75)]
-        let scaled = position * Double(ramp.count - 1)
-        return ramp[min(ramp.count - 1, Int(scaled.rounded()))]
+    /// Colour carries identity, not size. The area of a tile already says how
+    /// big it is; the old aqua ramp said it a second time and left every folder
+    /// looking like a shade of every other. Each folder now takes the next hue
+    /// in the palette, which is ordered so that adjacent tiles — and tiles are
+    /// laid out largest first — never land on neighbouring hues. Loose files
+    /// keep their own warm tone, and the consolidated tail stays grey.
+    private func tileColor(item: DiskMapItem, rank: Int) -> Color {
+        guard let entry = item.entry else { return Palette.tailTone }
+        guard entry.isDirectory else { return Palette.fileTone }
+        return Palette.folderTones[rank % Palette.folderTones.count]
     }
 
     @ViewBuilder
@@ -539,7 +577,14 @@ struct SpaceView: View {
                 Removal.revealInFinder(entry.url)
             }
         }
-        .onHover { hovered = $0 ? entry.id : (hovered == entry.id ? nil : hovered) }
+        .onHover { inside in
+            if inside {
+                hovered = entry.id
+                hoverSource = .list
+            } else if hovered == entry.id {
+                clearHover()
+            }
+        }
         .contextMenu { contextMenu(for: entry) }
     }
 
@@ -738,6 +783,15 @@ private struct LargeFileRow: View {
 }
 
 // MARK: - Map item
+
+/// Which surface put the current highlight up. Both the map and the Top 12
+/// cards write to the same `hovered` id so that hovering either one lights up
+/// the other; the source keeps the map's exit handler from clearing a
+/// highlight the list has just taken over.
+private enum HoverSource {
+    case map
+    case list
+}
 
 private struct DiskMapItem: Identifiable {
     let id: String

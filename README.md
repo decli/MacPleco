@@ -47,26 +47,37 @@ context menu before it is selected.
 
 **Apps** — Every installed app with its size and last-opened date. Uninstalling
 first shows the complete plan: the bundle plus every preference, container and
-cache it left elsewhere, each sized and individually declinable. Launch agents
-are included too.
+cache it left elsewhere, each sized and individually declinable. Tick several
+apps and the batch keeps the same promise — one sheet listing every bundle and
+every leftover, any of which can still be unticked before the single
+confirmation. Login items are included too, sortable by name, by scope, or by
+which of them actually run at login.
 
 **Space** — A full-width squarified map with legible adaptive labels, hover-
 linked ranking cards, breadcrumbs and long-tail consolidation. Drill into a
-folder with one click. The large-file view lists files over 100 MB with their
-absolute paths, an always-visible Finder button, path copying and a reversible
-Move to Trash action.
+folder with one click. Folders are measured with `getattrlistbulk` and a
+work-stealing pool, so the machine attacks the one enormous folder together
+instead of leaving it to a single thread: a 417 GB home folder goes from 17.9s
+to 3.1s, reporting the same total. The large-file view lists files over 100 MB
+with their absolute paths, an always-visible Finder button, path copying and a
+reversible Move to Trash action.
 
 **Tune-Up** — Eight repairs for specific symptoms: a broken Open With menu,
 blank preview thumbnails, tofu boxes instead of text, stale DNS, white page
 icons, `.DS_Store` files on shared drives, off-screen windows and a stuck
-Finder. Nothing is pre-selected.
+Finder. Every one has a visible Run button of its own, and several can be ticked
+and run together. Nothing is pre-selected.
 
-**Monitor** — Live CPU with per-core bars, memory in honest binary units,
-network activity and a process table sortable by CPU, GPU or memory. Choose
-live ordering to let rows move with usage, or fixed positions to refresh values
-without visual jumping. macOS does not expose other processes' live GPU
-percentage through a public unprivileged API, so that column shows “—” instead
-of a fabricated proxy. Sampling stops when you leave the section.
+**Monitor** — Live vitals in four equal cards: CPU split into app versus system
+time, memory split into app, wired and compressed, whole-device GPU load, and
+network split into download and upload. Every one of those is two or three
+quantities, so each gets its own colour and a legend rather than a single
+anonymous line. The process table can be searched by name, path or pid, filtered
+to apps or system processes, and sorted by name, memory, start time or CPU in
+either direction. Any row can be revealed in the Finder or asked to quit —
+politely first, forcibly only if you say so. macOS exposes no per-process GPU
+share to an unprivileged app, so that is reported for the device as a whole
+instead of being faked per row. Sampling stops when you leave the section.
 
 **Menu bar** — A small fish that answers “how full is my disk?” at a glance,
 with live vitals and one click into cleaning.
