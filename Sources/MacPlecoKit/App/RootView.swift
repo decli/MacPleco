@@ -5,11 +5,16 @@ import AppKit
 ///
 /// v0.2 hand-built the sidebar and hid the title bar to control every pixel —
 /// and immediately stopped looking like a Mac app, because on macOS 26 the
-/// unmistakable Liquid Glass chrome (the floating sidebar, the toolbar pills)
-/// belongs to the system containers. `NavigationSplitView` plus real
-/// `.toolbar` items get that glass drawn by the OS itself; our own
-/// `glassEffect` work is reserved for content cards, where custom elements
-/// are legitimate.
+/// unmistakable Liquid Glass chrome (the floating sidebar, the window's own
+/// title bar) belongs to the system containers. `NavigationSplitView` gets
+/// that glass drawn by the OS itself; our own `glassEffect` work is reserved
+/// for content cards, where custom elements are legitimate.
+///
+/// Page *controls* used to be `.toolbar` items for the same reason, and that
+/// was the one place the argument did not hold: a page's own control is not
+/// window chrome, and putting it there pinned it to the right edge of the
+/// window instead of the right edge of the content, on the three pages that
+/// happened to have one. They live in `PageHeader` now.
 public struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var columns = NavigationSplitViewVisibility.all
@@ -54,7 +59,7 @@ struct SidebarColumn: View {
             List(selection: selection) {
                 ForEach(Destination.allCases) { destination in
                     Label(destination.title, systemImage: destination.symbol)
-                        .font(.system(size: 14.5, weight: .medium))
+                        .font(.system(size: Typo.Step.subhead, weight: .medium))
                         .tag(destination)
                 }
             }
@@ -73,11 +78,11 @@ struct SidebarColumn: View {
                     .frame(width: 30, height: 30)
                     .shadow(color: Palette.aqua.opacity(0.4), radius: 6, y: 2)
                 Image(systemName: "fish.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: Typo.Step.subhead, weight: .semibold))
                     .foregroundStyle(.white)
             }
             Text("MacPleco")
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: Typo.Step.cardTitle, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
         }
         .padding(.top, Space.md)
@@ -90,11 +95,11 @@ struct SidebarColumn: View {
         return VStack(alignment: .leading, spacing: Space.sm) {
             HStack(alignment: .firstTextBaseline) {
                 Text(t("可用空间", "Free space"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Typo.captionStrong)
                     .foregroundStyle(Palette.inkTertiary)
                 Spacer()
                 Text(Bytes.format(storage.available))
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(Palette.ink)
@@ -106,13 +111,13 @@ struct SidebarColumn: View {
             )
             HStack {
                 Text(t("共 \(Bytes.format(storage.total))", "\(Bytes.format(storage.total)) total"))
-                    .font(.system(size: 10.5))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                 Spacer()
                 if #available(macOS 14.0, *) {
                     SettingsLink {
                         Image(systemName: "gearshape")
-                            .font(.system(size: 11.5))
+                            .font(.system(size: Typo.Step.caption))
                             .foregroundStyle(Palette.inkTertiary)
                     }
                     .buttonStyle(.plain)
@@ -168,36 +173,73 @@ struct DetailHost: View {
 
 // MARK: - Page scaffold
 
-/// Standard page chrome. The title and subtitle go through the REAL navigation
-/// bar (`navigationTitle`/`navigationSubtitle`), and page actions become real
-/// `.toolbar` items — on macOS 26 both render in the system's Liquid Glass,
-/// which no hand-rolled header can imitate.
+/// Standard page chrome.
+///
+/// Every page is: header, then optional note, then blocks — in that order, at
+/// that inset, at those sizes, on all six pages. The header's `trailing` slot
+/// is the one place a page-scoped control goes; see `PageHeader` for why it
+/// moved out of the toolbar.
+///
+/// `navigationTitle` stays, because it names the window in Mission Control,
+/// the Window menu and the accessibility tree. `.toolbar(removing: .title)`
+/// stops it being *drawn* a second time in the title bar, where it would
+/// duplicate the header two lines below it.
 struct Page<Content: View>: View {
     let destination: Destination
+    /// Overrides the destination's own line when a page has modes that do
+    /// genuinely different things — Apps' two tabs, say. The title never
+    /// changes: that is the sidebar's word for where you are.
+    var subtitle: String? = nil
     var trailing: AnyView? = nil
+    var note: AnyView? = nil
     var maxContentWidth: CGFloat = 1140
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
+                // Header and note are one group: Space.sm between them, so
+                // the note reads as part of the heading rather than as the
+                // first block. Blocks below sit Space.lg apart, so the group
+                // clears them by Space.lg + Space.sm — comfortably more than
+                // the gap *within* any group, which is what makes it read as
+                // a heading instead of as content.
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    PageHeader(
+                        title: destination.title,
+                        subtitle: subtitle ?? destination.subtitle
+                    ) {
+                        trailing
+                    }
+                    if let note { note }
+                }
+                .rises(0)
+                .padding(.bottom, Space.sm)
+
+                // Applied to each block, not to the group: a modifier on
+                // ViewBuilder content distributes over its elements, which is
+                // why the padding above could not live here.
                 content()
+                    .environment(\.staggerBase, 1)
             }
             .padding(.horizontal, Space.xxl)
-            .padding(.top, Space.lg)
+            .padding(.top, Space.xl)
             .padding(.bottom, Space.xxl)
             .frame(maxWidth: maxContentWidth + 2 * Space.xxl)
             .frame(maxWidth: .infinity)
         }
         .softScrollEdges()
-        .navigationTitle(destination.title)
-        .navigationSubtitle(destination.subtitle)
-        .toolbar {
-            if let trailing {
-                ToolbarItem(placement: .primaryAction) { trailing }
-            }
-        }
+        .pageChrome(destination)
         // Re-run entrance staggering when the section changes.
         .id(destination)
+    }
+}
+
+extension View {
+    /// The window-level naming every page shares. Split out so `SpaceView`,
+    /// which builds its own scroll views, cannot drift from it.
+    func pageChrome(_ destination: Destination) -> some View {
+        navigationTitle(destination.title)
+            .toolbar(removing: .title)
     }
 }

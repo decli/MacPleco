@@ -44,11 +44,11 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         Text(headline)
-                            .font(.system(size: 27, weight: .bold, design: .rounded))
+                            .font(Typo.feature)
                             .foregroundStyle(Palette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(supporting)
-                            .font(.system(size: 13.5))
+                            .font(Typo.body)
                             .foregroundStyle(Palette.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .lineSpacing(2)
@@ -89,7 +89,7 @@ struct OverviewView: View {
                         Image(systemName: "arrow.uturn.backward.circle.fill")
                             .foregroundStyle(Palette.aqua)
                     }
-                    .font(.system(size: 11.5))
+                    .font(.system(size: Typo.Step.caption))
                     .foregroundStyle(Palette.inkTertiary)
                 }
 
@@ -205,7 +205,7 @@ struct OverviewView: View {
         return GlassCard(padding: Space.lg, radius: Radius.card, tint: Palette.aqua) {
             HStack(spacing: Space.md) {
                 Image(systemName: "fish.fill")
-                    .font(.system(size: 15))
+                    .font(.system(size: Typo.Step.subhead))
                     .foregroundStyle(Palette.aquaSweep)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(
@@ -214,7 +214,7 @@ struct OverviewView: View {
                             "MacPleco has freed \(Bytes.format(ledger.totalBytes)) on this Mac so far"
                         )
                     )
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: Typo.Step.body, weight: .semibold))
                     .foregroundStyle(Palette.ink)
                     if let last = ledger.lastRecord {
                         Text(
@@ -223,7 +223,7 @@ struct OverviewView: View {
                                 "\(ledger.totalRuns) cleans · last one \(RelativeTime.describe(last.date).lowercased())"
                             )
                         )
-                        .font(.system(size: 11))
+                        .font(Typo.caption)
                         .foregroundStyle(Palette.inkSecondary)
                     }
                 }
@@ -242,12 +242,12 @@ struct PermissionCard: View {
         GlassCard(padding: Space.lg, tint: Palette.flow) {
             HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: "lock.open")
-                    .font(.system(size: 20))
+                    .font(.system(size: Typo.Step.pageTitle))
                     .foregroundStyle(Palette.flow)
 
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(t("还差一步：完全磁盘访问权限", "One step left: Full Disk Access"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Typo.subhead)
                         .foregroundStyle(Palette.ink)
                     Text(
                         t(
@@ -255,7 +255,7 @@ struct PermissionCard: View {
                             "macOS keeps every app out of other apps' cache folders by default. MacPleco needs this to measure what can be cleared, and you can revoke it at any time."
                         )
                     )
-                    .font(.system(size: 12))
+                    .font(Typo.labelPlain)
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -272,7 +272,7 @@ struct PermissionCard: View {
                         permissions.refresh()
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.flow)
                 }
             }

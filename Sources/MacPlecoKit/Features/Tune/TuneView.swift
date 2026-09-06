@@ -6,9 +6,19 @@ struct TuneView: View {
     private var tune: TuneModel { model.tune }
 
     var body: some View {
-        Page(destination: .tune) {
-            intro.rises(0)
-            actionBar.rises(1)
+        Page(
+            destination: .tune,
+            note: AnyView(
+                PageNote(
+                    symbol: "lock.shield",
+                    t(
+                        "遇到对应的问题再用。全部只影响你的账户，不需要管理员密码，也不会动到你的文件。",
+                        "Reach for one when you hit the matching problem. All of them stay inside your own account, need no administrator password, and touch none of your files."
+                    )
+                )
+            )
+        ) {
+            actionBar.rises(0)
             LazyVStack(spacing: Space.md) {
                 ForEach(Array(tune.tasks.enumerated()), id: \.element.id) { index, task in
                     TaskCard(
@@ -22,33 +32,8 @@ struct TuneView: View {
                         },
                         onRunAlone: { Task { await tune.run(task) } }
                     )
-                    .rises(min(index + 2, 8))
+                    .rises(min(index + 1, 8))
                 }
-            }
-        }
-    }
-
-    private var intro: some View {
-        GlassCard(padding: Space.lg, radius: Radius.card) {
-            HStack(alignment: .top, spacing: Space.md) {
-                Image(systemName: "wrench.adjustable")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Palette.aqua)
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text(t("针对具体毛病的小修小补", "Repairs for specific symptoms"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Palette.ink)
-                    Text(
-                        t(
-                            "这些不是日常保养，遇到对应的问题再用。全部只影响你的账户，不需要管理员密码，也不会动到你的文件。",
-                            "These aren't routine maintenance — reach for one when you hit the matching problem. All of them stay inside your own account, need no administrator password, and touch none of your files."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
             }
         }
     }
@@ -73,7 +58,7 @@ struct TuneView: View {
                     withAnimation(.smooth(duration: 0.25)) { tune.clearResults() }
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.inkTertiary)
             }
 
@@ -116,7 +101,7 @@ private struct TaskCard: View {
                 .padding(.top, 2)
 
             Image(systemName: task.symbol)
-                .font(.system(size: 15))
+                .font(.system(size: Typo.Step.subhead))
                 .foregroundStyle(isRunning ? Palette.aquaBright : Palette.aqua)
                 .frame(width: 24)
                 .padding(.top, 1)
@@ -124,20 +109,20 @@ private struct TaskCard: View {
 
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(task.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: Typo.Step.body, weight: .semibold))
                     .foregroundStyle(Palette.ink)
 
                 Text(task.detail)
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let warning = task.warning {
                     HStack(spacing: Space.xs) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 9))
+                            .font(.system(size: Typo.Step.micro))
                         Text(warning)
-                            .font(.system(size: 10))
+                            .font(.system(size: Typo.Step.overline))
                     }
                     .foregroundStyle(Palette.caution)
                 }
@@ -145,10 +130,10 @@ private struct TaskCard: View {
                 if let result {
                     HStack(spacing: Space.xs) {
                         Image(systemName: result.succeeded ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(.system(size: 10))
+                            .font(.system(size: Typo.Step.overline))
                             .symbolEffect(.bounce, value: result.message)
                         Text(result.message)
-                            .font(.system(size: 10))
+                            .font(.system(size: Typo.Step.overline))
                             .lineLimit(2)
                     }
                     .foregroundStyle(result.succeeded ? Palette.positive : Palette.danger)
@@ -166,7 +151,7 @@ private struct TaskCard: View {
                         ProgressView().controlSize(.small)
                     } else {
                         Image(systemName: "play.fill")
-                            .font(.system(size: 9))
+                            .font(.system(size: Typo.Step.micro))
                     }
                     Text(isRunning ? t("执行中", "Running") : t("执行", "Run"))
                 }

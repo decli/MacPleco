@@ -245,16 +245,16 @@ public struct DepthRing: View {
     private var readout: some View {
         VStack(spacing: Space.xxs) {
             Text(caption)
-                .font(.system(size: 12, weight: .medium))
+                .font(Typo.label)
                 .foregroundStyle(Palette.inkTertiary)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
+                    .font(Typo.hero)
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
                     .contentTransition(.numericText())
                 Text(unit)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(Typo.cardTitle)
                     .foregroundStyle(Palette.inkSecondary)
             }
         }

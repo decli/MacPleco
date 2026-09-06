@@ -31,23 +31,25 @@ struct SpaceView: View {
     var body: some View {
         @Bindable var space = model.space
 
-        VStack(alignment: .leading, spacing: Space.lg) {
+        Page(
+            destination: .space,
+            subtitle: space.tab == .map
+                ? Destination.space.subtitle
+                : t(
+                    "常用文件夹里超过 100 MB 的文件",
+                    "Files over 100 MB in your everyday folders"
+                ),
+            trailing: AnyView(pageControls),
+            note: AnyView(modeNote)
+        ) {
             switch space.tab {
-            case .map: mapMode
-            case .large: largeMode
-            }
-        }
-        .navigationTitle(Destination.space.title)
-        .navigationSubtitle(Destination.space.subtitle)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Picker("", selection: $space.tab) {
-                    ForEach(SpaceModel.Tab.allCases) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+            case .map:
+                breadcrumb.rises(0)
+                mapOverview.rises(1)
+                rankedEntries.rises(2)
+                snapshotFootnote.rises(3)
+            case .large:
+                largeList.rises(0)
             }
         }
         .task { await space.start() }
@@ -63,6 +65,68 @@ struct SpaceView: View {
             trashAlert(name: file.name, size: file.size) {
                 Task { _ = await space.trashLargeFile(file, storage: model.storage) }
             }
+        }
+    }
+
+    /// Both of this page's page-scoped controls, in the one slot every page
+    /// puts them in. "Look again" used to be a ghost button buried inside a
+    /// card in the content, while Clean's identical "Rescan" lived in the
+    /// toolbar — the same action, two different places, on two pages of the
+    /// same app.
+    private var pageControls: some View {
+        @Bindable var space = model.space
+        return HStack(spacing: Space.md) {
+            if space.tab == .large {
+                if space.isScanningLarge {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button {
+                        Task { await space.scanLarge() }
+                    } label: {
+                        Label(t("重新查找", "Look again"), systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
+            }
+            Picker("", selection: $space.tab) {
+                ForEach(SpaceModel.Tab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+    }
+
+    /// How to operate what is below, said once, above it.
+    ///
+    /// The map's instruction used to sit at the *bottom* of the page, past a
+    /// treemap and twelve ranked cards — after the point where it could have
+    /// helped anyone.
+    @ViewBuilder
+    private var modeNote: some View {
+        switch space.tab {
+        case .map:
+            PageNote(
+                symbol: "hand.tap",
+                t(
+                    "单击进入文件夹，右键可以在访达中显示或移到废纸篓。",
+                    "Click a tile to open it; right-click to reveal in Finder or move to Trash."
+                )
+            )
+        case .large:
+            PageNote(
+                symbol: "doc.badge.clock",
+                space.isScanningLarge
+                    ? t(
+                        "正在翻看常用文件夹… 已看过 \(space.largeFilesScanned) 个文件",
+                        "Looking through your everyday folders… \(space.largeFilesScanned) files so far"
+                      )
+                    : t(
+                        "按大小排列。每项都显示完整路径，并可先在访达中确认。",
+                        "Largest first. Every row shows its full path and opens in Finder for verification."
+                      )
+            )
         }
     }
 
@@ -82,36 +146,19 @@ struct SpaceView: View {
 
     // MARK: - Map mode
 
-    private var mapMode: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.lg) {
-                breadcrumb
-                mapOverview
-                rankedEntries
-                hint
-            }
-            .padding(.horizontal, Space.xxl)
-            .padding(.top, Space.lg)
-            .padding(.bottom, Space.xxl)
-            .frame(maxWidth: 1240 + 2 * Space.xxl)
-            .frame(maxWidth: .infinity)
-        }
-        .softScrollEdges()
-    }
-
     private var breadcrumb: some View {
         HStack(spacing: Space.xs) {
             ForEach(Array(space.trail.enumerated()), id: \.element.id) { index, entry in
                 if index > 0 {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: Typo.Step.micro, weight: .semibold))
                         .foregroundStyle(Palette.inkFaint)
                 }
                 Button {
                     Task { await space.goTo(index: index) }
                 } label: {
                     Text(entry.name)
-                        .font(.system(size: 12.5, weight: index == space.trail.count - 1 ? .semibold : .regular))
+                        .font(.system(size: Typo.Step.label, weight: index == space.trail.count - 1 ? .semibold : .regular))
                         .foregroundStyle(index == space.trail.count - 1 ? Palette.ink : Palette.flow)
                 }
                 .buttonStyle(.plain)
@@ -129,7 +176,7 @@ struct SpaceView: View {
                             "Measuring \(space.scanned)/\(space.expected)"
                         )
                     )
-                    .font(.system(size: 11.5))
+                    .font(Typo.caption)
                     .monospacedDigit()
                     .foregroundStyle(Palette.inkTertiary)
                 }
@@ -138,7 +185,7 @@ struct SpaceView: View {
                     Task { await space.refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11))
+                        .font(.system(size: Typo.Step.caption))
                         .foregroundStyle(Palette.inkTertiary)
                 }
                 .buttonStyle(.plain)
@@ -150,7 +197,7 @@ struct SpaceView: View {
                         "\(Bytes.format(space.totalSize)) here"
                     )
                 )
-                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .font(.system(size: Typo.Step.label, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.inkSecondary)
             }
@@ -161,6 +208,24 @@ struct SpaceView: View {
     }
 
     // MARK: - Treemap
+
+    /// Why the folder sizes do not add up to the used space.
+    ///
+    /// Only shown when there is something to explain. A Mac with no local
+    /// snapshots gets no paragraph about snapshots.
+    @ViewBuilder
+    private var snapshotFootnote: some View {
+        let count = model.storage.localSnapshots
+        if count > 0 {
+            PageNote(
+                symbol: "clock.arrow.circlepath",
+                t(
+                    "这台 Mac 上有 \(count) 个 Time Machine 本地快照。快照会占住已删除或已改写文件的磁盘块，这些块不属于任何文件夹，所以上面的统计里找不到它们。可用空间那个数字已经把它们算作可回收，macOS 需要空间时会自动清除。",
+                    "This Mac is holding \(count) Time Machine local snapshots. A snapshot pins the disk blocks of files you have since deleted or rewritten; those blocks belong to no folder any more, so nothing above can account for them. The free-space figure already treats them as reclaimable — macOS evicts them when it needs the room."
+                )
+            )
+        }
+    }
 
     private var mapOverview: some View {
         GlassCard(padding: Space.md, radius: Radius.panel) {
@@ -181,7 +246,7 @@ struct SpaceView: View {
                         "Area represents size · click a folder to drill down"
                     )
                 )
-                .font(.system(size: 10.5))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.inkTertiary)
             }
 
@@ -190,11 +255,11 @@ struct SpaceView: View {
             if let item = hoveredMapItem {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(item.name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: Typo.Step.label, weight: .semibold))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     Text("\(Bytes.format(item.size)) · \(mapShare(item.size))")
-                        .font(.system(size: 10.5, design: .rounded))
+                        .font(.system(size: Typo.Step.caption, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Palette.inkSecondary)
                 }
@@ -225,7 +290,7 @@ struct SpaceView: View {
                 }
             }
             Text(label)
-                .font(.system(size: 9.5, weight: .medium))
+                .font(.system(size: Typo.Step.overline, weight: .medium))
                 .foregroundStyle(Palette.inkTertiary)
         }
     }
@@ -378,7 +443,7 @@ struct SpaceView: View {
                         "Measuring folder sizes — each appears as it finishes…"
                     )
                 )
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.inkSecondary)
             }
             .padding(Space.lg)
@@ -390,10 +455,10 @@ struct SpaceView: View {
     private var unreadableState: some View {
         VStack(spacing: Space.md) {
             Image(systemName: "eye.slash")
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: Typo.Step.feature, weight: .light))
                 .foregroundStyle(Palette.inkTertiary)
             Text(t("这里读不到内容", "Nothing readable here"))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
                 .foregroundStyle(Palette.ink)
             Text(
                 t(
@@ -401,7 +466,7 @@ struct SpaceView: View {
                     "The folder may be empty, or it may need Full Disk Access to read."
                 )
             )
-            .font(.system(size: 12))
+            .font(Typo.labelPlain)
             .foregroundStyle(Palette.inkSecondary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: 300)
@@ -438,14 +503,14 @@ struct SpaceView: View {
                         HStack(spacing: 6) {
                             if prominent {
                                 Image(systemName: item.entry?.isDirectory == false ? "doc.fill" : "folder.fill")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(size: Typo.Step.label, weight: .semibold))
                             }
                             Text(item.name)
                         }
-                            .font(.system(size: prominent ? 17 : 12.5, weight: .semibold, design: .rounded))
+                            .font(.system(size: prominent ? Typo.Step.cardTitle : Typo.Step.body, weight: .semibold, design: .rounded))
                             .lineLimit(2)
                         Text("\(Bytes.format(item.size)) · \(mapShare(item.size))")
-                            .font(.system(size: prominent ? 12.5 : 10.5, weight: .medium, design: .rounded))
+                            .font(.system(size: prominent ? Typo.Step.body : Typo.Step.caption, weight: .medium, design: .rounded))
                             .monospacedDigit()
                             .opacity(0.85)
                     }
@@ -506,17 +571,6 @@ struct SpaceView: View {
         }
     }
 
-    private var hint: some View {
-        Text(
-            t(
-                "单击进入文件夹，右键可以在访达中显示或移到废纸篓。",
-                "Click a tile to open it; right-click to reveal in Finder or move to Trash."
-            )
-        )
-        .font(.system(size: 11))
-        .foregroundStyle(Palette.inkTertiary)
-    }
-
     private func copyPath(_ url: URL) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url.path, forType: .string)
@@ -528,7 +582,7 @@ struct SpaceView: View {
                 SectionLabel(t("占用最多", "Largest items"))
                 Spacer()
                 Text(t("前 12 项 · 与地图联动", "Top 12 · linked to the map"))
-                    .font(.system(size: 10.5))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
 
@@ -553,23 +607,23 @@ struct SpaceView: View {
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack(spacing: Space.sm) {
                 Text("\(rank)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(.system(size: Typo.Step.overline, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.inkTertiary)
                     .frame(width: 20, height: 20)
                     .background { Circle().fill(Palette.wellFill) }
 
                 Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: Typo.Step.label))
                     .foregroundStyle(entry.isDirectory ? Palette.aqua : Palette.caution)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(.system(size: Typo.Step.body, weight: .semibold))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Text(verbatim: entry.url.path)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(Typo.microMono)
                         .foregroundStyle(Palette.inkTertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -580,11 +634,11 @@ struct SpaceView: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(Bytes.format(entry.size))
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .font(Typo.labelNumeric)
                         .monospacedDigit()
                         .foregroundStyle(Palette.ink)
                     Text(mapShare(entry.size))
-                        .font(.system(size: 9.5, design: .rounded))
+                        .font(.system(size: Typo.Step.overline, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Palette.inkTertiary)
                 }
@@ -593,7 +647,7 @@ struct SpaceView: View {
                     Removal.revealInFinder(entry.url)
                 } label: {
                     Image(systemName: "folder")
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(.system(size: Typo.Step.caption, weight: .medium))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
@@ -630,76 +684,34 @@ struct SpaceView: View {
 
     // MARK: - Large files mode
 
-    private var largeMode: some View {
-        ScrollView {
-            // Lazy on purpose: up to 120 rows land in one update when the scan
-            // finishes, and building them all at once (each with a glass pane
-            // and an icon) stalled the main thread visibly.
-            LazyVStack(alignment: .leading, spacing: Space.md) {
-                largeHeader
-                if space.isScanningLarge && space.largeFiles.isEmpty {
-                    ForEach(0..<6, id: \.self) { _ in
-                        SkeletonBlock(radius: Radius.card).frame(height: 56)
-                    }
-                } else if space.largeFiles.isEmpty {
-                    RestfulState(
-                        symbol: "sparkle.magnifyingglass",
-                        title: t("没有值得注意的大文件", "No large files worth flagging"),
-                        message: t(
-                            "常用文件夹里没有超过 100 MB 的文件。",
-                            "Nothing over 100 MB is sitting in your everyday folders."
-                        )
+    private var largeList: some View {
+        // Lazy on purpose: up to 120 rows land in one update when the scan
+        // finishes, and building them all at once (each with a glass pane
+        // and an icon) stalled the main thread visibly.
+        LazyVStack(alignment: .leading, spacing: Space.md) {
+            if space.isScanningLarge && space.largeFiles.isEmpty {
+                ForEach(0..<6, id: \.self) { _ in
+                    SkeletonBlock(radius: Radius.card).frame(height: 56)
+                }
+            } else if space.largeFiles.isEmpty {
+                RestfulState(
+                    symbol: "sparkle.magnifyingglass",
+                    title: t("没有值得注意的大文件", "No large files worth flagging"),
+                    message: t(
+                        "常用文件夹里没有超过 100 MB 的文件。",
+                        "Nothing over 100 MB is sitting in your everyday folders."
                     )
-                } else {
-                    ForEach(space.largeFiles) { file in
-                        LargeFileRow(file: file, canTrash: space.canTrash(file.url)) {
-                            pendingLargeTrash = file
-                        }
+                )
+            } else {
+                ForEach(space.largeFiles) { file in
+                    LargeFileRow(file: file, canTrash: space.canTrash(file.url)) {
+                        pendingLargeTrash = file
                     }
                 }
             }
-            .padding(.horizontal, Space.xxl)
-            .padding(.top, Space.lg)
-            .padding(.bottom, Space.xxl)
-            .frame(maxWidth: 1140 + 2 * Space.xxl)
-            .frame(maxWidth: .infinity)
         }
-        .softScrollEdges()
     }
 
-    private var largeHeader: some View {
-        GlassCard(padding: Space.md, radius: Radius.card) {
-            HStack(spacing: Space.md) {
-                Image(systemName: "doc.badge.clock")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Palette.flow)
-                Text(
-                    space.isScanningLarge
-                        ? t(
-                            "正在翻看常用文件夹… 已看过 \(space.largeFilesScanned) 个文件",
-                            "Looking through your everyday folders… \(space.largeFilesScanned) files so far"
-                          )
-                        : t(
-                            "常用文件夹里超过 100 MB 的文件，按大小排列。每项都显示完整路径，并可先在访达中确认。",
-                            "Files over 100 MB in everyday folders, largest first. Every row shows its full path and opens in Finder for verification."
-                          )
-                )
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.inkSecondary)
-                Spacer(minLength: 0)
-                if space.isScanningLarge {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button {
-                        Task { await space.scanLarge() }
-                    } label: {
-                        Label(t("重新查找", "Look again"), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Large file row
@@ -723,7 +735,7 @@ private struct LargeFileRow: View {
                         .resizable()
                 } else {
                     Image(systemName: "doc.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: Typo.Step.subhead))
                         .foregroundStyle(Palette.inkFaint)
                 }
             }
@@ -739,13 +751,13 @@ private struct LargeFileRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 Text(verbatim: file.url.path)
-                    .font(.system(size: 9.5, design: .monospaced))
+                    .font(Typo.microMono)
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(2)
                     .truncationMode(.middle)
@@ -754,13 +766,13 @@ private struct LargeFileRow: View {
 
                 HStack(spacing: Space.sm) {
                     Text(file.folder)
-                        .font(.system(size: 10.5))
+                        .font(Typo.caption)
                         .foregroundStyle(Palette.inkTertiary)
                         .padding(.horizontal, Space.sm)
                         .padding(.vertical, 2)
                         .background { Capsule().fill(Palette.wellFill) }
                     Text(RelativeTime.describe(file.modified))
-                        .font(.system(size: 10.5))
+                        .font(Typo.caption)
                         .foregroundStyle(isStale ? Palette.caution : Palette.inkTertiary)
                 }
             }
@@ -768,7 +780,7 @@ private struct LargeFileRow: View {
             Spacer(minLength: Space.md)
 
             Text(Bytes.format(file.size))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.ink)
                 .frame(minWidth: 76, alignment: .trailing)
@@ -777,7 +789,7 @@ private struct LargeFileRow: View {
                 Removal.revealInFinder(file.url)
             } label: {
                 Label(t("访达", "Finder"), systemImage: "folder")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(Typo.captionStrong)
             }
             .buttonStyle(.bordered)
             .controlSize(.mini)

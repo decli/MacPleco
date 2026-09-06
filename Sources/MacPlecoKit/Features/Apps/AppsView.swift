@@ -13,15 +13,23 @@ struct AppsView: View {
     var body: some View {
         @Bindable var apps = model.apps
 
-        Page(destination: .apps, trailing: AnyView(tabPicker)) {
+        Page(
+            destination: .apps,
+            // The two tabs do genuinely different jobs, so the header says
+            // which one you are in rather than naming both at once.
+            subtitle: apps.tab == .installed
+                ? t("卸载应用，连同它留在别处的文件", "Uninstall apps, along with what they left elsewhere")
+                : t("管理开机时自动启动的后台程序", "Manage what starts up with your Mac"),
+            trailing: AnyView(tabPicker),
+            note: apps.tab == .startup ? AnyView(startupNote) : nil
+        ) {
             switch apps.tab {
             case .installed:
                 installedControls.rises(0)
                 selectionBar.rises(1)
                 installedList
             case .startup:
-                startupIntro.rises(0)
-                startupControls.rises(1)
+                startupControls.rises(0)
                 startupList
             }
         }
@@ -88,7 +96,6 @@ struct AppsView: View {
                 text: $apps.query,
                 prompt: t("搜索应用", "Search apps")
             )
-            .frame(maxWidth: 260)
 
             Picker("", selection: $apps.sort) {
                 ForEach(AppsModel.SortKey.allCases) { key in
@@ -101,7 +108,7 @@ struct AppsView: View {
 
             Toggle(isOn: $apps.showSystemApps) {
                 Text(t("含系统自带", "Include system apps"))
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkSecondary)
             }
             .toggleStyle(.switch)
@@ -113,7 +120,7 @@ struct AppsView: View {
                 HStack(spacing: Space.sm) {
                     ProgressView().controlSize(.small)
                     Text(t("正在计算体积…", "Measuring sizes…"))
-                        .font(.system(size: 11))
+                        .font(Typo.caption)
                         .foregroundStyle(Palette.inkTertiary)
                 }
                 .transition(.opacity)
@@ -145,7 +152,7 @@ struct AppsView: View {
                         withAnimation(.smooth(duration: 0.25)) { apps.clearSelection() }
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(Typo.labelPlain)
                     .foregroundStyle(Palette.inkTertiary)
                 }
 
@@ -217,34 +224,23 @@ struct AppsView: View {
 
     // MARK: - Startup
 
-    private var startupIntro: some View {
-        GlassCard(padding: Space.lg, radius: Radius.card) {
-            HStack(alignment: .top, spacing: Space.md) {
-                Image(systemName: "bolt.badge.clock")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Palette.flow)
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text(t("开机时自动启动的后台程序", "Background programs that start with your Mac"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Palette.ink)
-                    Text(
-                        t(
-                            "多数是应用的更新器或辅助进程。带锁的属于系统范围，需要在「系统设置 › 通用 › 登录项」里处理。",
-                            "Most are updaters or helpers belonging to apps. Locked entries are system-wide — handle those in System Settings › General › Login Items."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    /// What used to be a `GlassCard` restating the page. A caveat is not a
+    /// card: it belongs with the heading, at caption size, not competing with
+    /// the login items it is describing.
+    private var startupNote: some View {
+        PageNote(
+            symbol: "bolt.badge.clock",
+            t(
+                "多数是应用的更新器或辅助进程。带锁的属于系统范围，需要在「系统设置 › 通用 › 登录项」里处理。",
+                "Most are updaters or helpers belonging to apps. Locked entries are system-wide — handle those in System Settings › General › Login Items."
+            )
+        ) {
+            Button(t("打开登录项设置", "Open Login Items")) {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                    _ = NSWorkspace.shared.open(url)
                 }
-                Spacer(minLength: Space.sm)
-                Button(t("打开登录项设置", "Open Login Items")) {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
-                        _ = NSWorkspace.shared.open(url)
-                    }
-                }
-                .buttonStyle(GhostButtonStyle())
             }
+            .buttonStyle(GhostButtonStyle())
         }
     }
 
@@ -255,11 +251,10 @@ struct AppsView: View {
                 text: $apps.startupQuery,
                 prompt: t("搜索名称或标识", "Search name or label")
             )
-            .frame(maxWidth: 260)
 
             HStack(spacing: Space.sm) {
                 Text(t("排序", "Sort"))
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                 Picker("", selection: $apps.startupSort) {
                     ForEach(AppsModel.StartupSortKey.allCases) { key in
@@ -284,7 +279,7 @@ struct AppsView: View {
                             "\(apps.runsAtLoadCount) run at login"
                         )
                     )
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .monospacedDigit()
                     .foregroundStyle(Palette.inkSecondary)
                 }
@@ -299,7 +294,7 @@ struct AppsView: View {
                 HStack(spacing: Space.sm) {
                     ProgressView().controlSize(.small)
                     Text(t("正在读取…", "Reading…"))
-                        .font(.system(size: 12))
+                        .font(Typo.labelPlain)
                         .foregroundStyle(Palette.inkTertiary)
                 }
                 .padding(.vertical, Space.xl)
@@ -323,41 +318,6 @@ struct AppsView: View {
                 .animation(.smooth(duration: 0.3), value: items.map(\.id))
             }
         }
-    }
-}
-
-// MARK: - Search field
-
-/// The app's one search control, so every page's search looks and clears the
-/// same way.
-struct SearchField: View {
-    @Binding var text: String
-    let prompt: String
-
-    var body: some View {
-        HStack(spacing: Space.sm) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundStyle(Palette.inkTertiary)
-            TextField(prompt, text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Palette.inkFaint)
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.7)))
-            }
-        }
-        .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm)
-        .glassSurface(Capsule(style: .continuous))
-        .animation(.smooth(duration: 0.2), value: text.isEmpty)
     }
 }
 
@@ -387,17 +347,17 @@ private struct AppRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name)
-                    .font(.system(size: 13.5, weight: .medium))
+                    .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                 HStack(spacing: Space.sm) {
                     if !app.version.isEmpty {
                         Text(app.version)
-                            .font(.system(size: 10.5))
+                            .font(Typo.caption)
                             .foregroundStyle(Palette.inkTertiary)
                     }
                     Text(lastUsedText)
-                        .font(.system(size: 10.5))
+                        .font(Typo.caption)
                         .foregroundStyle(idleTint)
                 }
             }
@@ -405,7 +365,7 @@ private struct AppRow: View {
             Spacer(minLength: Space.md)
 
             Text(app.size > 0 ? Bytes.format(app.size) : "—")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: Typo.Step.label, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .foregroundStyle(Palette.inkSecondary)
@@ -413,7 +373,7 @@ private struct AppRow: View {
 
             if app.isSystem {
                 Text(t("系统自带", "System"))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: Typo.Step.overline, weight: .medium))
                     .foregroundStyle(Palette.inkTertiary)
                     .padding(.horizontal, Space.sm)
                     .padding(.vertical, 3)
@@ -427,7 +387,7 @@ private struct AppRow: View {
                         Removal.revealInFinder(app.url)
                     } label: {
                         Image(systemName: "folder")
-                            .font(.system(size: 10.5))
+                            .font(.system(size: Typo.Step.caption))
                             .foregroundStyle(Palette.flow)
                     }
                     .buttonStyle(.plain)
@@ -502,16 +462,16 @@ private struct LoginItemRow: View {
     var body: some View {
         HStack(spacing: Space.md) {
             Image(systemName: item.isUserScope ? "person.crop.circle" : "lock.fill")
-                .font(.system(size: 13))
+                .font(.system(size: Typo.Step.body))
                 .foregroundStyle(item.isUserScope ? Palette.flow : Palette.inkTertiary)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.displayName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Typo.label)
                     .foregroundStyle(Palette.ink)
                 Text(item.label)
-                    .font(.system(size: 10))
+                    .font(.system(size: Typo.Step.overline))
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -521,7 +481,7 @@ private struct LoginItemRow: View {
 
             if item.runsAtLoad {
                 Text(t("开机即启动", "Runs at login"))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: Typo.Step.overline, weight: .medium))
                     .foregroundStyle(Palette.caution)
                     .padding(.horizontal, Space.sm)
                     .padding(.vertical, 2.5)
@@ -532,7 +492,7 @@ private struct LoginItemRow: View {
                 Removal.revealInFinder(item.url)
             } label: {
                 Image(systemName: "arrow.up.forward.app")
-                    .font(.system(size: 11))
+                    .font(.system(size: Typo.Step.caption))
                     .foregroundStyle(Palette.flow)
             }
             .buttonStyle(.plain)
@@ -544,7 +504,7 @@ private struct LoginItemRow: View {
                     .buttonStyle(GhostButtonStyle(tint: Palette.danger))
             } else {
                 Text(t("需系统设置", "System-wide"))
-                    .font(.system(size: 10))
+                    .font(.system(size: Typo.Step.overline))
                     .foregroundStyle(Palette.inkTertiary)
             }
         }
@@ -579,7 +539,7 @@ private struct UninstallSheet: View {
                         "This app hasn't left anything else behind."
                     )
                 )
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.inkSecondary)
             } else {
                 VStack(alignment: .leading, spacing: Space.sm) {
@@ -618,7 +578,7 @@ private struct UninstallSheet: View {
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("卸载 \(plan.app.name)", "Uninstall \(plan.app.name)"))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(Typo.cardTitle)
                     .foregroundStyle(Palette.ink)
                 Text(
                     t(
@@ -626,7 +586,7 @@ private struct UninstallSheet: View {
                         "App bundle \(Bytes.format(plan.bundleSize))"
                     )
                 )
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.inkSecondary)
             }
             Spacer()
@@ -637,12 +597,12 @@ private struct UninstallSheet: View {
         HStack(spacing: Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("共释放 \(Bytes.format(plan.totalSize))", "Frees \(Bytes.format(plan.totalSize))"))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(Palette.ink)
                 Text(t("全部移到废纸篓，可以恢复。", "All moved to the Trash — recoverable."))
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
             Spacer()
@@ -708,14 +668,14 @@ private struct BatchUninstallSheet: View {
     private var header: some View {
         HStack(spacing: Space.md) {
             Image(systemName: "trash")
-                .font(.system(size: 20))
+                .font(.system(size: Typo.Step.pageTitle))
                 .foregroundStyle(Palette.danger)
                 .frame(width: 44, height: 44)
                 .background { Circle().fill(Palette.danger.opacity(0.12)) }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("卸载 \(plan.appCount) 个应用", "Uninstall \(plan.appCount) apps"))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(Typo.cardTitle)
                     .foregroundStyle(Palette.ink)
                     .contentTransition(.numericText())
                 Text(
@@ -724,7 +684,7 @@ private struct BatchUninstallSheet: View {
                         "Along with \(plan.leftoverCount) leftovers they created. Anything here can be unticked."
                     )
                 )
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.inkSecondary)
             }
             Spacer()
@@ -745,7 +705,7 @@ private struct BatchUninstallSheet: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.app.name)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(Typo.label)
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     Text(
@@ -756,14 +716,14 @@ private struct BatchUninstallSheet: View {
                                 "Bundle \(Bytes.format(entry.bundleSize)) · \(entry.leftovers.count) leftovers \(Bytes.format(entry.leftoverSize))"
                             )
                     )
-                    .font(.system(size: 10))
+                    .font(.system(size: Typo.Step.overline))
                     .foregroundStyle(Palette.inkTertiary)
                 }
 
                 Spacer(minLength: Space.sm)
 
                 Text(Bytes.format(entry.totalSize))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(Typo.labelNumeric)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(included ? Palette.ink : Palette.inkFaint)
@@ -775,7 +735,7 @@ private struct BatchUninstallSheet: View {
                         }
                     } label: {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: Typo.Step.overline, weight: .semibold))
                             .foregroundStyle(Palette.inkTertiary)
                             .rotationEffect(.degrees(isOpen ? 90 : 0))
                     }
@@ -809,12 +769,12 @@ private struct BatchUninstallSheet: View {
         HStack(spacing: Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("共释放 \(Bytes.format(plan.totalSize))", "Frees \(Bytes.format(plan.totalSize))"))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(Palette.ink)
                 Text(t("全部移到废纸篓，可以恢复。", "All moved to the Trash — recoverable."))
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
             Spacer()
@@ -873,13 +833,13 @@ private struct LeftoverRow: View {
                 Removal.revealInFinder(leftover.url)
             } label: {
                 Image(systemName: "folder")
-                    .font(.system(size: 10))
+                    .font(.system(size: Typo.Step.overline))
                     .foregroundStyle(Palette.flow)
             }
             .buttonStyle(.plain)
             .help(t("在访达中显示", "Show in Finder"))
             Text(Bytes.format(leftover.size))
-                .font(.system(size: 11, design: .rounded))
+                .font(.system(size: Typo.Step.caption, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.inkSecondary)
         }

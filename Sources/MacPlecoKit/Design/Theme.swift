@@ -191,3 +191,73 @@ public enum Space {
     public static let xxl: CGFloat = 32
     public static let huge: CGFloat = 48
 }
+
+// MARK: - Type ramp
+
+/// Every piece of text in the app picks one of these roles.
+///
+/// Before this existed the app used **27 distinct point sizes**, eight of them
+/// packed between 9 and 13.5pt — a range where a half-point difference is
+/// invisible as hierarchy and visible only as sloppiness. `SelectionBar` alone
+/// set four adjacent labels in one row at 12, 11.5, 12.5 and 11pt. Nobody can
+/// read that as structure.
+///
+/// The ramp below is eleven steps. Each step is at least a whole point from
+/// its neighbours, and each role fixes size *and* weight *and* typeface design
+/// together, so choosing how to set a piece of text is one decision instead of
+/// three. Emphasis inside a role is a weight step (`.weight(.semibold)`), never
+/// a new size.
+///
+/// The ordering claim the ramp makes about this app: a page's own name is
+/// orientation, not the message. `pageTitle` (20) therefore sits *below*
+/// `metric` (24) — the number the user came for outranks the label on the door.
+public enum Typo {
+
+    /// The raw steps, for the few places that need a number rather than a
+    /// `Font` — icon sizing that has to match adjacent text, mostly.
+    public enum Step {
+        /// Paths, chart axis ticks, sort glyphs. Text that is present for
+        /// reference, not for reading.
+        public static let micro: CGFloat = 9
+        /// Badges and section overlines. Always semibold, usually tracked.
+        public static let overline: CGFloat = 10
+        /// Metadata, hints, footnotes.
+        public static let caption: CGFloat = 11
+        /// Control labels and secondary row text.
+        public static let label: CGFloat = 12
+        /// Prose. The page's supporting sentence lives here.
+        public static let body: CGFloat = 13
+        /// Card titles, primary row text, button labels.
+        public static let subhead: CGFloat = 15
+        /// The heading of a card that owns a whole block.
+        public static let cardTitle: CGFloat = 17
+        /// The page's own name.
+        public static let pageTitle: CGFloat = 20
+        /// A stat card's value.
+        public static let metric: CGFloat = 24
+        /// The one sentence a page leads with, when it has one.
+        public static let feature: CGFloat = 30
+        /// The single largest number on a page. Never more than one.
+        public static let hero: CGFloat = 44
+    }
+
+    public static let micro = Font.system(size: Step.micro)
+    public static let microMono = Font.system(size: Step.micro, design: .monospaced)
+    /// Uppercase section labels and badges. Tracking is applied by the
+    /// components that use it, since it only suits capitals.
+    public static let overline = Font.system(size: Step.overline, weight: .semibold)
+    public static let caption = Font.system(size: Step.caption)
+    public static let captionStrong = Font.system(size: Step.caption, weight: .medium)
+    public static let label = Font.system(size: Step.label, weight: .medium)
+    public static let labelPlain = Font.system(size: Step.label)
+    public static let labelNumeric = Font.system(size: Step.label, weight: .semibold, design: .rounded)
+    public static let body = Font.system(size: Step.body)
+    public static let bodyStrong = Font.system(size: Step.body, weight: .medium)
+    public static let subhead = Font.system(size: Step.subhead, weight: .semibold)
+    public static let subheadPlain = Font.system(size: Step.subhead)
+    public static let cardTitle = Font.system(size: Step.cardTitle, weight: .semibold, design: .rounded)
+    public static let pageTitle = Font.system(size: Step.pageTitle, weight: .bold, design: .rounded)
+    public static let metric = Font.system(size: Step.metric, weight: .bold, design: .rounded)
+    public static let feature = Font.system(size: Step.feature, weight: .bold, design: .rounded)
+    public static let hero = Font.system(size: Step.hero, weight: .bold, design: .rounded)
+}

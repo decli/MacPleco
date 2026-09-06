@@ -23,11 +23,29 @@ public struct HoverLift: ViewModifier {
     }
 }
 
+/// How many stagger steps the surrounding scaffold has already used.
+///
+/// `Page` draws its header at step 0 and then sets this to 1, so a page's own
+/// blocks keep passing 0, 1, 2… as they always did and still land *after* the
+/// header rather than alongside it. Without it, adding the header would have
+/// meant renumbering every `.rises()` call in the app.
+private struct StaggerBaseKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
+extension EnvironmentValues {
+    var staggerBase: Int {
+        get { self[StaggerBaseKey.self] }
+        set { self[StaggerBaseKey.self] = newValue }
+    }
+}
+
 /// Fade-and-rise entrance, staggered by index. Sections pass 0, 1, 2… to
 /// their top-level blocks so a page assembles instead of popping.
 public struct StaggerIn: ViewModifier {
     let index: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.staggerBase) private var base
     @State private var shown = false
 
     public func body(content: Content) -> some View {
@@ -36,7 +54,7 @@ public struct StaggerIn: ViewModifier {
             .offset(y: shown || reduceMotion ? 0 : 16)
             .onAppear {
                 guard !shown else { return }
-                withAnimation(.smooth(duration: 0.55).delay(Double(index) * 0.06)) {
+                withAnimation(.smooth(duration: 0.55).delay(Double(base + index) * 0.06)) {
                     shown = true
                 }
             }
@@ -109,10 +127,27 @@ public struct GlassCard<Content: View>: View {
 
 // MARK: - Page header
 
-/// The heading every section opens with. Title carries the section name, the
-/// support line says what the page will do for you in plain words — the two
-/// together are the only orientation a first-time user gets, so neither is
-/// decorative.
+/// The one heading every page opens with.
+///
+/// This used to be the system's `navigationTitle`/`navigationSubtitle`, drawn
+/// by AppKit in the title bar. Two things were wrong with that. AppKit picks
+/// the sizes — roughly 14pt for the title and 10.5pt for the subtitle — so the
+/// page's own name rendered *smaller than half the labels in the content below
+/// it*, and no amount of styling could reach it. And it sat outside the
+/// content column, which meant a page's controls had to be flung to the far
+/// right of the **window** rather than lining up with the **content** they act
+/// on, drifting further away the wider the window got.
+///
+/// So the header comes back into the content, on the content's own left edge,
+/// at sizes this app controls: 20pt for the name, 13pt for the sentence that
+/// says what the page does. The trailing slot is the page's single page-scoped
+/// control — a mode switch, or a rescan — and it is the *only* place one goes.
+/// Filters and searches, which act on a list rather than on the page, stay
+/// with their list.
+///
+/// The title is deliberately smaller than a stat card's 24pt value. The
+/// sidebar already says which page this is; the header only confirms it. The
+/// number the user came for should be the loudest thing on the screen.
 public struct PageHeader<Trailing: View>: View {
     private let title: String
     private let subtitle: String
@@ -129,16 +164,67 @@ public struct PageHeader<Trailing: View>: View {
     }
 
     public var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Space.lg) {
+        HStack(alignment: .center, spacing: Space.lg) {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(title)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(Typo.pageTitle)
                     .foregroundStyle(Palette.ink)
                 Text(subtitle)
-                    .font(.system(size: 13.5))
+                    .font(Typo.body)
                     .foregroundStyle(Palette.inkSecondary)
+                    // A longer translation wraps rather than pushing the
+                    // control off the trailing edge.
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: Space.md)
+            trailing
+        }
+    }
+}
+
+/// One line of page-scoped guidance directly under the header: what this page
+/// will and will not touch, or how to operate the thing below it.
+///
+/// It replaces three separate `GlassCard`s that each explained their own page
+/// in their own size (11pt on Tune, 11pt on Apps' startup tab, 13.5pt in the
+/// Overview hero) and repeated what the subtitle had already said one line
+/// above. A caveat is not a card: it should not compete with the content for
+/// the same visual weight.
+public struct PageNote<Trailing: View>: View {
+    private let symbol: String
+    private let text: String
+    private let tint: Color
+    private let trailing: Trailing
+
+    public init(
+        symbol: String = "info.circle",
+        _ text: String,
+        tint: Color = Palette.inkTertiary,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) {
+        self.symbol = symbol
+        self.text = text
+        self.tint = tint
+        self.trailing = trailing()
+    }
+
+    public var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+            // A fixed box, because SF Symbols of one point size do not share
+            // one width or one baseline. Measured across the four notes, the
+            // free-sized glyph left the text starting at x=304.5 on Tune and
+            // x=305 on Space, one line 1pt higher than the other — a hanging
+            // indent that moved when you changed page.
+            Image(systemName: symbol)
+                .font(.system(size: Typo.Step.caption, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 13, height: 13)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
+            Text(text)
+                .font(Typo.caption)
+                .foregroundStyle(Palette.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Space.sm)
             trailing
         }
     }
@@ -155,7 +241,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         if #available(macOS 26.0, *) {
             configuration.label
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, wide ? Space.xxl : Space.xl)
                 .padding(.vertical, Space.md)
@@ -167,7 +253,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
                 .contentShape(Capsule(style: .continuous))
         } else {
             configuration.label
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, wide ? Space.xxl : Space.xl)
                 .padding(.vertical, Space.md)
@@ -195,7 +281,7 @@ public struct GhostButtonStyle: ButtonStyle {
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .medium))
+            .font(Typo.bodyStrong)
             .foregroundStyle(tint)
             .padding(.horizontal, Space.lg)
             .padding(.vertical, Space.sm)
@@ -257,7 +343,7 @@ public struct SafetyChip: View {
                 .font(.system(size: compact ? 8 : 9, weight: .bold))
             if !compact {
                 Text(safety.label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Typo.overline)
             }
         }
         .foregroundStyle(safety.tint)
@@ -268,6 +354,53 @@ public struct SafetyChip: View {
                 .fill(safety.tint.opacity(0.14))
         }
         .accessibilityLabel(safety.label)
+    }
+}
+
+// MARK: - Search field
+
+/// The app's one search control, so every page's search looks, sizes and
+/// clears the same way.
+///
+/// It lived inside `AppsView` and Monitor had copied its twenty-two lines
+/// verbatim rather than importing it, which is how the two widths happened.
+public struct SearchField: View {
+    @Binding var text: String
+    let prompt: String
+
+    public init(text: Binding<String>, prompt: String) {
+        self._text = text
+        self.prompt = prompt
+    }
+
+    public var body: some View {
+        HStack(spacing: Space.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: Typo.Step.caption))
+                .foregroundStyle(Palette.inkTertiary)
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .font(Typo.labelPlain)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: Typo.Step.caption))
+                        .foregroundStyle(Palette.inkFaint)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .scale(scale: 0.7)))
+            }
+        }
+        .padding(.horizontal, Space.md)
+        .padding(.vertical, Space.sm)
+        .glassSurface(Capsule(style: .continuous))
+        // Sized here, not at the call site. Apps asked for 260 and Monitor
+        // for 300, so the app's "one search control" came in two widths on
+        // two pages that sit one click apart.
+        .frame(maxWidth: 260)
+        .animation(.smooth(duration: 0.2), value: text.isEmpty)
     }
 }
 
@@ -312,7 +445,7 @@ public struct TriStateBox: View {
                     )
                 if state == .on {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .black))
+                        .font(.system(size: Typo.Step.micro, weight: .black))
                         .foregroundStyle(.white)
                 } else if state == .mixed {
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
@@ -379,13 +512,13 @@ public struct RestfulState: View {
     public var body: some View {
         VStack(spacing: Space.md) {
             Image(systemName: symbol)
-                .font(.system(size: 34, weight: .light))
+                .font(.system(size: Typo.Step.feature, weight: .light))
                 .foregroundStyle(Palette.aqua)
             Text(title)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(Typo.cardTitle)
                 .foregroundStyle(Palette.ink)
             Text(message)
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.inkSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
@@ -406,7 +539,7 @@ public struct SectionLabel: View {
 
     public var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
+            .font(Typo.overline)
             .tracking(0.6)
             .foregroundStyle(Palette.inkTertiary)
     }
@@ -474,7 +607,7 @@ public struct StatCard<Chart: View, Extra: View>: View {
                 header
 
                 Text(value)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(Typo.metric)
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
                     .contentTransition(.numericText())
@@ -520,7 +653,7 @@ public struct StatCard<Chart: View, Extra: View>: View {
                 }
 
                 Text(detail)
-                    .font(.system(size: 11.5))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(detailLines)
                     .fixedSize(horizontal: false, vertical: true)
@@ -535,16 +668,16 @@ public struct StatCard<Chart: View, Extra: View>: View {
     private var header: some View {
         HStack(spacing: Space.sm) {
             Image(systemName: symbol)
-                .font(.system(size: 11.5))
+                .font(.system(size: Typo.Step.caption))
                 .foregroundStyle(tint)
             Text(label)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(Typo.label)
                 .foregroundStyle(Palette.inkTertiary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             if let badge {
                 Text(badge)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Typo.overline)
                     .foregroundStyle(tint)
                     .padding(.horizontal, Space.sm)
                     .padding(.vertical, 2.5)
@@ -656,13 +789,13 @@ public struct LegendDot: View {
                 .frame(width: 7, height: 7)
             if let label {
                 Text(label)
-                    .font(.system(size: 10))
+                    .font(.system(size: Typo.Step.overline))
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(1)
             }
             if let value {
                 Text(value)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(.system(size: Typo.Step.overline, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(color)
                     .contentTransition(.numericText())
@@ -924,7 +1057,7 @@ public struct CountPill: View {
 
     public var body: some View {
         Text("\(count)")
-            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+            .font(.system(size: Typo.Step.caption, weight: .bold, design: .rounded))
             .monospacedDigit()
             .contentTransition(.numericText())
             .foregroundStyle(.white)
@@ -972,22 +1105,22 @@ public struct SelectionBar<Actions: View>: View {
 
             Button(action: onToggleAll) {
                 Text(allSelected ? t("取消全选", "Deselect all") : t("全选", "Select all"))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Typo.label)
                     .foregroundStyle(Palette.flow)
             }
             .buttonStyle(.plain)
 
             HStack(spacing: Space.xs) {
                 Text(t("已选", "Selected"))
-                    .font(.system(size: 11.5))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                 Text("\(selectedCount)")
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(selectedCount > 0 ? Palette.ink : Palette.inkTertiary)
                 Text("/ \(totalCount)")
-                    .font(.system(size: 11)) 
+                    .font(Typo.caption) 
                     .monospacedDigit()
                     .foregroundStyle(Palette.inkFaint)
             }

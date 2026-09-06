@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AppKit
 
 @Observable
 @MainActor
@@ -19,6 +20,10 @@ public final class CleanModel {
     public private(set) var progress: ScanProgress?
     public private(set) var hasScanned = false
     public private(set) var lastFailures: Int = 0
+
+    /// Apps that started running between the scan and the click, whose caches
+    /// were therefore left alone. Reported rather than silently dropped.
+    public private(set) var lastSkipped: [BlockedApp] = []
 
     /// Categories the user has opened. Nothing is expanded to begin with — the
     /// summary is the point, and the detail is there for those who want it.
@@ -153,26 +158,82 @@ public final class CleanModel {
 
     // MARK: - Cleaning
 
+    /// What this run will actually touch.
+    ///
+    /// Pure, and separated from `clean` on purpose: the interesting behaviour
+    /// is "a selected item whose app is running right now is left alone", and
+    /// the only way to check that inside `clean` would be to let it delete
+    /// something. Given the same categories and the same running set this
+    /// answers the same way with no filesystem involved.
+    public struct CleanPlan: Sendable {
+        public var recyclable: [URL] = []
+        public var erasable: [URL] = []
+        public var sizes: [URL: Int64] = [:]
+        public var skipped: [BlockedApp] = []
+    }
+
+    /// - Parameter runningNow: bundle id -> display name, read at the moment
+    ///   of the click rather than at the moment of the scan.
+    /// `nonisolated` because it touches no actor state: it is a function of
+    /// its three arguments and nothing else. That is also what lets a test
+    /// call it without hopping to the main actor.
+    public nonisolated static func partition(
+        categories: [CleanCategory],
+        permanentDelete: Bool,
+        runningNow: [String: String]
+    ) -> CleanPlan {
+        var plan = CleanPlan()
+        var skipped: [String: Int64] = [:]
+
+        for category in categories {
+            for item in category.items where item.isSelected {
+                if let bundleID = item.bundleID, let name = runningNow[bundleID] {
+                    skipped[name, default: 0] += item.size
+                    continue
+                }
+                plan.sizes[item.url] = item.size
+                // The Trash category can only be erased; everything else is
+                // recycled unless the user explicitly opted in.
+                if category.id.requiresPermanentDeletion || permanentDelete {
+                    plan.erasable.append(item.url)
+                } else {
+                    plan.recyclable.append(item.url)
+                }
+            }
+        }
+
+        plan.skipped = skipped
+            .map { BlockedApp(name: $0.key, bytes: $0.value) }
+            .sorted { $0.bytes > $1.bytes }
+        return plan
+    }
+
     public func clean(storage: StorageModel, ledger: LedgerModel? = nil) async {
         guard selectedCount > 0, !isBusy else { return }
         phase = .cleaning
 
-        // The Trash category can only be erased; everything else is recycled
-        // unless the user explicitly opted into permanent deletion.
-        var recyclable: [URL] = []
-        var erasable: [URL] = []
-        var sizes: [URL: Int64] = [:]
-
-        for category in categories {
-            for item in category.items where item.isSelected {
-                sizes[item.url] = item.size
-                if category.id.requiresPermanentDeletion || permanentDelete {
-                    erasable.append(item.url)
-                } else {
-                    recyclable.append(item.url)
-                }
-            }
+        // Who is running *now*, not who was running when the scan ran.
+        //
+        // `blockedBy` is decided during the scan, and a scan can be minutes
+        // old: open the page, go and use Chrome, come back and press the
+        // button, and the old answer said Chrome was closed. Re-reading the
+        // workspace here costs microseconds and is the only check that is
+        // true at the moment the files actually go.
+        var runningNow: [String: String] = [:]
+        for app in NSWorkspace.shared.runningApplications {
+            guard let id = app.bundleIdentifier else { continue }
+            runningNow[id] = app.localizedName ?? AppRegistry.prettifyBundleID(id)
         }
+
+        let plan = Self.partition(
+            categories: categories,
+            permanentDelete: permanentDelete,
+            runningNow: runningNow
+        )
+        let recyclable = plan.recyclable
+        let erasable = plan.erasable
+        let sizes = plan.sizes
+        lastSkipped = plan.skipped
 
         var freed: Int64 = 0
         var trashedCount = 0
@@ -203,6 +264,8 @@ public final class CleanModel {
         let removedPaths = Set(
             (recyclable + erasable).map(\.path)
         )
+        // Anything skipped above is not in that set, so it stays in the list
+        // — which is what should happen: it is still on disk.
         for categoryIndex in categories.indices {
             categories[categoryIndex].items.removeAll { removedPaths.contains($0.path) }
         }

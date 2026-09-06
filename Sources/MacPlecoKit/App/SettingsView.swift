@@ -39,7 +39,7 @@ struct SettingsView: View {
                         "Liquid Glass looks its best in dark water."
                     )
                 )
-                .font(.system(size: 11))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.inkTertiary)
             }
 
@@ -47,7 +47,7 @@ struct SettingsView: View {
                 SectionLabel(t("菜单栏", "Menu bar"))
                 Toggle(isOn: $menuBarEnabled) {
                     Text(t("在菜单栏显示小鱼", "Show the fish in the menu bar"))
-                        .font(.system(size: 12.5))
+                        .font(Typo.labelPlain)
                         .foregroundStyle(Palette.ink)
                 }
                 .toggleStyle(.switch)
@@ -58,7 +58,7 @@ struct SettingsView: View {
                         "Free space at a glance, cleaning one click away."
                     )
                 )
-                .font(.system(size: 11))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.inkTertiary)
             }
 
@@ -72,7 +72,7 @@ struct SettingsView: View {
                         ? t("已获得完全磁盘访问权限", "Full Disk Access granted")
                         : t("尚未获得完全磁盘访问权限", "Full Disk Access not granted")
                 )
-                .font(.system(size: 12))
+                .font(Typo.labelPlain)
                 .foregroundStyle(Palette.ink)
                 Spacer()
                 Button(t("打开设置", "Open Settings")) {
@@ -91,14 +91,14 @@ struct SettingsView: View {
                             "\(Bytes.format(model.ledger.totalBytes)) freed across \(model.ledger.totalRuns) cleans"
                         )
                     )
-                    .font(.system(size: 12))
+                    .font(Typo.labelPlain)
                     .foregroundStyle(Palette.ink)
                     Spacer()
                     Button(t("清零统计", "Reset stats")) {
                         model.ledger.reset()
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                 }
             }
@@ -140,15 +140,15 @@ struct SettingsView: View {
                         .fill(Palette.aquaSweep)
                         .frame(width: 32, height: 32)
                     Image(systemName: "fish.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: Typo.Step.subhead, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MacPleco \(appVersion)")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
                         .foregroundStyle(Palette.ink)
                     Text(t("GPL-3.0 开源许可", "Licensed under GPL-3.0"))
-                        .font(.system(size: 11))
+                        .font(Typo.caption)
                         .foregroundStyle(Palette.inkTertiary)
                 }
                 Spacer()
@@ -160,7 +160,7 @@ struct SettingsView: View {
                     "Inspired by Mole, tw93's terminal-first toolkit. If you live in a terminal, use that instead."
                 )
             )
-            .font(.system(size: 11))
+            .font(Typo.caption)
             .foregroundStyle(Palette.inkSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -169,7 +169,7 @@ struct SettingsView: View {
                 Link(t("反馈问题", "Report an issue"), destination: URL(string: "https://github.com/decli/MacPleco/issues")!)
                 Link("Mole", destination: URL(string: "https://github.com/tw93/Mole")!)
             }
-            .font(.system(size: 11))
+            .font(Typo.caption)
             .tint(Palette.flow)
         }
     }

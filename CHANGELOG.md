@@ -7,6 +7,117 @@ page.
 这里记录 MacPleco 的主要变化。安装制品与完整双语说明请见
 [Releases](https://github.com/decli/MacPleco/releases) 页面。
 
+## [0.3.6] - 2026-09-07
+
+### Changed · 改进
+
+- One page header, in the content, on all six pages. It used to be the
+  system's `navigationTitle`/`navigationSubtitle`, which AppKit draws at about
+  14pt and 10.5pt in the title bar — the page's own name rendered smaller than
+  half the labels below it, and no styling could reach it. The header is now
+  a real element on the content's own left edge: 20pt for the name, 13pt for
+  the sentence that says what the page does. Measured at the minimum window
+  width in both languages, the title starts at x=284 and the subtitle at
+  x=284 on every page.
+- Page-scoped controls have one home. The mode switch was a toolbar item on
+  Apps and Space, "Rescan" was a toolbar item on Clean, and Space's identical
+  "Look again" was a ghost button buried in a card halfway down the content.
+  All four now sit in the header's trailing slot, right-aligned to the content
+  column rather than to the window: measured, every page's control ends at the
+  same x.
+- Three cards that each re-explained their own page — Tune's intro, Apps'
+  login-items intro, Space's large-files header — are one `PageNote` line
+  under the header, at one size, with one hanging indent. Space's "click a
+  tile to open it" hint moved with them, from the bottom of the page to above
+  the map it describes.
+- One type ramp. The app used 27 distinct point sizes, eight of them between
+  9 and 13.5pt, and `SelectionBar` set four adjacent labels in a single row at
+  12, 11.5, 12.5 and 11pt. Every size now comes from an eleven-step ramp with
+  named roles, and no raw font size literal remains in the source.
+- The content column is one width. Space's map used 1240pt while every other
+  page used 1140, so the content's right edge moved when you changed page.
+- One search control. Monitor had copied `SearchField`'s twenty-two lines
+  rather than importing it, and the two copies had drifted to 300pt and 260pt
+  wide; the component now owns its width and lives in the design system.
+
+- 六个页面共用同一个页面标题，且放回内容区。此前用的是系统的
+  `navigationTitle`/`navigationSubtitle`，由 AppKit 以约 14pt 和 10.5pt 绘制在标题
+  栏里——页面自己的名字比下方一半的标签还小，而且样式完全够不着。现在它是内容区
+  里真正的元素，与内容同一条左边线：名称 20pt，说明这一页做什么的句子 13pt。在最小
+  窗口宽度下实测，中英文六个页面的标题与副标题都从 x=284 开始。
+- 页面级控件只有一个位置。模式切换此前在「应用」和「空间」的工具栏里，「重新扫描」在
+  「清理」的工具栏里，而「空间」里作用完全相同的「重新查找」却是内容中段某张卡片里的
+  一个次要按钮。四者现在都在标题栏右侧插槽中，对齐内容列的右边线而不是窗口右边线：
+  实测每个页面的控件都终止于同一个 x。
+- 三张各自重复解释本页的卡片——「优化」的说明、「应用」的开机项说明、「空间」的大文件
+  说明——合并为标题下方的一行 `PageNote`，同一字号、同一悬挂缩进。「空间」的「单击进入
+  文件夹」提示也随之从页面底部移到了它所描述的地图上方。
+- 统一字号阶梯。此前全应用使用 27 种字号，其中 8 种挤在 9 到 13.5pt 之间，`SelectionBar`
+  更是在同一行里用了 12、11.5、12.5、11pt 四种。现在所有字号都来自一套十一级、带语义
+  命名的阶梯，源码中不再有任何字号字面量。
+- 内容列只有一个宽度。「空间」的地图此前用 1240pt，其余页面用 1140pt，换页时内容的右
+  边线会移动。
+- 只有一个搜索控件。「监控」此前是把 `SearchField` 的二十二行代码抄了一份而不是引用它，
+  两份副本已经漂移成 300pt 和 260pt 两种宽度；该组件现在自己决定宽度，并归入设计系统。
+
+### Fixed · 修复
+
+- `~/.cache` is no longer treated as one undifferentiated pile of junk. The
+  catch-all rule labelled every directory under it "Safe to remove" and ticked
+  it, which on a developer's Mac meant offering `~/.cache/huggingface`
+  alongside a hash table. The rules that really are caches — pip, uv,
+  go-build, pre-commit — are named individually and stay pre-selected; the
+  sweep that catches everything else is listed for review and never ticked for
+  you. Playwright and Puppeteer browser downloads are review-only wherever
+  they landed, matching the treatment `~/Library/Caches/ms-playwright` already
+  had.
+- Model downloads and working environments under `~/.cache` are never offered.
+  A rule is matched at its top level, so the existing weight heuristics —
+  which look for `/models/`, `.gguf` and friends *in the matched path* — never
+  saw inside `~/.cache/huggingface`; those stores are now named. Poetry is the
+  subtler case: removal takes the whole matched directory, so offering
+  `~/.cache/pypoetry` at all would have taken `virtualenvs` with it. The
+  directory itself is refused as an exact match while `~/.cache/pypoetry/
+  artifacts` and `~/.cache/pypoetry/cache` stay reclaimable on their own.
+- A test now asserts that no catalog rule is shadowed by an earlier one. A
+  specific rule written after a sweep that covers it can never fire, and its
+  category, label and safety are lost silently — which is exactly the failure
+  the two fixes above depend on not happening.
+- A clean now re-reads which apps are running at the moment you press the
+  button, not at the moment of the scan. Scanning, going off to use Chrome and
+  coming back would delete Chrome's cache out from under it on an answer that
+  was minutes old. Anything skipped this way is named in the result, with the
+  bytes it left behind — a low number that says why beats a number that is
+  quietly wrong.
+- The Space map explains why the folder sizes cannot add up to the used space,
+  when there is something to explain: Time Machine local snapshots pin the
+  blocks of files that have since been deleted or rewritten, those blocks
+  belong to no folder, and the free-space figure already counts them as
+  reclaimable. Shown with the snapshot count, and only when the count is
+  non-zero.
+
+- `~/.cache` 不再被当成一堆无差别的垃圾。此前的通配规则把它下面的每个目录都标成
+  「随时可删」并默认勾选——在开发者的 Mac 上，这意味着 `~/.cache/huggingface` 跟一张
+  哈希表被一视同仁。真正是缓存的那些——pip、uv、go-build、pre-commit——现在逐个列名并
+  保持默认勾选；兜底的通配规则会列出来供你确认，但绝不替你勾上。Playwright 和 Puppeteer
+  下载的浏览器无论落在哪个目录，都只列出不勾选，与 `~/Library/Caches/ms-playwright`
+  早就有的待遇一致。
+- `~/.cache` 下的模型下载和工作环境完全不再出现。规则是在顶层匹配的，所以原有的权重
+  启发式——它们在**被匹配的那个路径**里找 `/models/`、`.gguf` 之类——根本看不到
+  `~/.cache/huggingface` 内部；这些仓库现在按名字列出。Poetry 是更微妙的一例：删除拿走
+  的是整个被匹配的目录，所以只要 `~/.cache/pypoetry` 被列出来，`virtualenvs` 就会跟着
+  一起走。现在该目录本身按精确匹配拒绝，而 `~/.cache/pypoetry/artifacts` 和
+  `~/.cache/pypoetry/cache` 仍可单独回收。
+- 新增测试断言：没有任何规则会被更早的规则遮蔽。写在通配规则之后的具体规则永远不会生效，
+  它的分类、名称和安全等级会悄无声息地丢失——而上面两条修复恰恰依赖这件事不发生。
+- 清理时会重新读取「此刻」哪些应用在运行，而不是沿用扫描当时的答案。先扫描、去用一会儿
+  Chrome、回来再点清理，此前会依据几分钟前的旧答案把 Chrome 的缓存从它脚下删掉。被跳过
+  的项会在结果里点名，并列出留在原处的字节数——一个说明了原因的偏小数字，好过一个悄无
+  声息的错误数字。
+- 空间地图会解释「为什么文件夹加起来对不上已用空间」——在确实有东西要解释的时候：
+  Time Machine 本地快照占住了已删除或已改写文件的磁盘块，这些块不属于任何文件夹，而可用
+  空间那个数字已经把它们算作可回收。会同时显示快照数量，且仅在数量不为零时出现。
+
 ## [0.3.5] - 2026-08-20
 
 ### Fixed · 修复

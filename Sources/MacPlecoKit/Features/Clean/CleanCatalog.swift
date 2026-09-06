@@ -137,6 +137,12 @@ public enum CleanCatalog {
         ".ollama/models",
         "models",
         "Library/Application Support/Ollama/models",
+        // Model downloads that live under `~/.cache`. The weight heuristic
+        // below only fires on the matched path, and these are matched at their
+        // top level, so name them.
+        ".cache/huggingface",
+        ".cache/torch",
+        ".cache/lm-studio",
         "Library/Caches/com.apple.iTunes",
         "Library/Caches/CloudKit",
         "Library/Caches/com.apple.homed",
@@ -156,6 +162,13 @@ public enum CleanCatalog {
         ".kube"
     ]
 
+    /// Directories that mix a throwaway cache with state the tool cannot
+    /// rebuild. Removal takes the whole matched directory, so the directory
+    /// itself is never offered — only the rules naming its cache reach inside.
+    private static let neverOfferWhole: [String] = [
+        ".cache/pypoetry"   // holds `virtualenvs`, which are working environments
+    ]
+
     public static func isBlocked(_ url: URL) -> Bool {
         let home = NSHomeDirectory()
         let path = url.standardizedFileURL.path
@@ -163,6 +176,7 @@ public enum CleanCatalog {
             let full = "\(home)/\(suffix)"
             if path == full || path.hasPrefix(full + "/") { return true }
         }
+        for suffix in neverOfferWhole where path == "\(home)/\(suffix)" { return true }
         // Anything that looks like a downloaded model weight stays put; these
         // are enormous, slow to fetch and frequently sit in cache directories.
         let lowered = path.lowercased()
@@ -288,7 +302,48 @@ public enum CleanCatalog {
                 selectedByDefault: false,
                 note: t("重新下载依赖较慢", "Dependencies are slow to re-download")
             ),
-            CleanRule(category: .developer, pattern: "~/.cache/*", naming: .fileName),
+            // `~/.cache` is a shared drawer rather than one tool's cache: some
+            // entries are throwaway, others are the only copy of something.
+            // Name the ones that really are caches, and leave the sweep that
+            // catches the rest as something to look at rather than tick.
+            CleanRule(category: .developer, pattern: "~/.cache/pip", naming: .fixed("pip")),
+            CleanRule(category: .developer, pattern: "~/.cache/uv", naming: .fixed("uv")),
+            CleanRule(category: .developer, pattern: "~/.cache/go-build", naming: .fixed("Go build cache")),
+            CleanRule(category: .developer, pattern: "~/.cache/pre-commit", naming: .fixed("pre-commit")),
+            CleanRule(
+                category: .developer,
+                pattern: "~/.cache/pypoetry/artifacts",
+                naming: .fixed("Poetry artifacts")
+            ),
+            CleanRule(
+                category: .developer,
+                pattern: "~/.cache/pypoetry/cache",
+                naming: .fixed("Poetry cache")
+            ),
+            CleanRule(
+                category: .developer,
+                pattern: "~/.cache/ms-playwright",
+                naming: .fixed("Playwright browsers"),
+                safety: .review,
+                selectedByDefault: false,
+                note: t("重新下载浏览器需要较长时间", "Re-downloading the browsers takes a while")
+            ),
+            CleanRule(
+                category: .developer,
+                pattern: "~/.cache/puppeteer",
+                naming: .fixed("Puppeteer browsers"),
+                safety: .review,
+                selectedByDefault: false,
+                note: t("重新下载浏览器需要较长时间", "Re-downloading the browsers takes a while")
+            ),
+            CleanRule(
+                category: .developer,
+                pattern: "~/.cache/*",
+                naming: .fileName,
+                safety: .review,
+                selectedByDefault: false,
+                note: t("里面可能是工具要用的状态，不只是缓存", "May hold state a tool needs, not just cache")
+            ),
             CleanRule(category: .developer, pattern: "~/.nvm/.cache", naming: .fixed("nvm")),
             CleanRule(category: .developer, pattern: "~/.electron", naming: .fixed("Electron")),
             CleanRule(category: .developer, pattern: "~/.electron-gyp", naming: .fixed("electron-gyp"))
@@ -371,6 +426,23 @@ public enum CleanCatalog {
             CleanRule(category: .trash, pattern: "~/.Trash/*", naming: .fileName)
         ]
 
-        return all
+        // The scanner keeps the first rule to reach a path, so a hand-written
+        // rule has to be seen before the sweep it sits inside — otherwise its
+        // category, label and safety never apply. Whenever one pattern covers
+        // everything another can match, it is the one with more `*`
+        // components, so ordering by wildcard count puts the specific rule
+        // first no matter which section it was written in. The sort is made
+        // stable by hand: Swift's is not, and each section's own order matters.
+        return all.enumerated()
+            .sorted { lhs, rhs in
+                let left = wildcardCount(lhs.element.pattern)
+                let right = wildcardCount(rhs.element.pattern)
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }
+            .map(\.element)
+    }
+
+    private static func wildcardCount(_ pattern: String) -> Int {
+        pattern.split(separator: "/").count { $0 == "*" }
     }
 }

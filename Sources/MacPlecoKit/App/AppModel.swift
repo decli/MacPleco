@@ -36,7 +36,7 @@ public enum Destination: String, CaseIterable, Identifiable, Hashable {
         case .clean: return t("腾出可以回收的空间", "Reclaim wasted space")
         case .apps: return t("卸载应用，管理开机启动", "Uninstall apps, manage login items")
         case .space: return t("看看空间都去哪儿了", "See where the space went")
-        case .tune: return t("修复与刷新系统缓存", "Repair and refresh system caches")
+        case .tune: return t("针对具体毛病的小修小补", "Repairs for specific symptoms")
         case .monitor: return t("实时性能与进程", "Live performance and processes")
         }
     }

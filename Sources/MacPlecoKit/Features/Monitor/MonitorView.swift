@@ -256,13 +256,13 @@ struct MonitorView: View {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     HStack(spacing: Space.sm) {
                         Image(systemName: "macbook")
-                            .font(.system(size: 12))
+                            .font(.system(size: Typo.Step.label))
                             .foregroundStyle(Palette.inkTertiary)
                         Text(SystemInfo.chip.replacingOccurrences(of: "Apple ", with: ""))
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.system(size: Typo.Step.subhead, weight: .bold, design: .rounded))
                             .foregroundStyle(Palette.ink)
                         Text(SystemInfo.thermalDescription)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(Typo.overline)
                             .foregroundStyle(thermalTint)
                             .padding(.horizontal, Space.sm)
                             .padding(.vertical, 2.5)
@@ -274,7 +274,7 @@ struct MonitorView: View {
                             "\(SystemInfo.coreCount) cores · \(Bytes.formatMemory(SystemInfo.physicalMemory)) memory · macOS \(SystemInfo.osVersion) · up \(RelativeTime.duration(SystemInfo.uptime))"
                         )
                     )
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkSecondary)
                 }
 
@@ -282,7 +282,7 @@ struct MonitorView: View {
 
                 VStack(alignment: .trailing, spacing: Space.xs) {
                     Text(t("每个核心的负载", "Per-core load"))
-                        .font(.system(size: 9.5, weight: .semibold))
+                        .font(Typo.overline)
                         .tracking(0.5)
                         .foregroundStyle(Palette.inkTertiary)
                     CoreGrid(loads: monitor.coreLoads)
@@ -311,7 +311,7 @@ struct MonitorView: View {
                     } icon: {
                         Image(systemName: outcome.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     }
-                    .font(.system(size: 11))
+                    .font(.system(size: Typo.Step.caption))
                     .foregroundStyle(outcome.succeeded ? Palette.positive : Palette.caution)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: outcome.message) {
@@ -357,7 +357,7 @@ struct MonitorView: View {
                             .fill(Palette.aqua)
                             .frame(width: 5, height: 5)
                         Text(t("实时", "Live"))
-                            .font(.system(size: 10))
+                            .font(.system(size: Typo.Step.overline))
                             .foregroundStyle(Palette.inkTertiary)
                     }
                 }
@@ -381,33 +381,10 @@ struct MonitorView: View {
             }
 
             HStack(spacing: Space.md) {
-                HStack(spacing: Space.sm) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Palette.inkTertiary)
-                    TextField(
-                        t("搜索进程名、路径或 PID", "Search name, path or PID"),
-                        text: $monitor.query
-                    )
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    if !monitor.query.isEmpty {
-                        Button {
-                            monitor.query = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Palette.inkFaint)
-                        }
-                        .buttonStyle(.plain)
-                        .transition(.opacity.combined(with: .scale(scale: 0.7)))
-                    }
-                }
-                .padding(.horizontal, Space.md)
-                .padding(.vertical, Space.sm)
-                .glassSurface(Capsule(style: .continuous))
-                .frame(maxWidth: 300)
-                .animation(.smooth(duration: 0.2), value: monitor.query.isEmpty)
+                SearchField(
+                    text: $monitor.query,
+                    prompt: t("搜索进程名、路径或 PID", "Search name, path or PID")
+                )
 
                 Picker("", selection: $monitor.scope) {
                     ForEach(ProcessScope.allCases) { scope in
@@ -432,7 +409,7 @@ struct MonitorView: View {
                         "\(monitor.processes.count) shown of \(monitor.matchCount)"
                     )
                 )
-                .font(.system(size: 10.5))
+                .font(Typo.caption)
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .foregroundStyle(Palette.inkTertiary)
@@ -446,7 +423,7 @@ struct MonitorView: View {
             HStack(spacing: Space.sm) {
                 ProgressView().controlSize(.small)
                 Text(t("正在读取…", "Reading…"))
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
             .padding(.vertical, Space.md)
@@ -475,7 +452,7 @@ struct MonitorView: View {
 
             Color.clear.frame(width: 56, height: 1)
         }
-        .font(.system(size: 9.5, weight: .semibold))
+        .font(Typo.overline)
         .foregroundStyle(Palette.inkTertiary)
         .padding(.bottom, Space.xs)
     }
@@ -515,7 +492,7 @@ struct MonitorView: View {
 
     private var sortChevron: some View {
         Image(systemName: monitor.sortAscending ? "chevron.up" : "chevron.down")
-            .font(.system(size: 7, weight: .bold))
+            .font(.system(size: Typo.Step.micro, weight: .bold))
             .transition(.opacity)
     }
 
@@ -526,7 +503,7 @@ struct MonitorView: View {
                 "Fan speed and die temperature need privileged access to read. MacPleco won't guess at numbers, so it shows the thermal state macOS publishes instead. GPU figures cover the whole device: macOS exposes no per-process GPU share to ordinary apps, and every tool that reports one needs administrator access."
             )
         )
-        .font(.system(size: 11))
+        .font(Typo.caption)
         .foregroundStyle(Palette.inkTertiary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -549,12 +526,12 @@ private struct ProcessRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Space.sm) {
                     Text(process.name)
-                        .font(.system(size: 12.5))
+                        .font(Typo.labelPlain)
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     if process.isSystem {
                         Text(t("系统", "System"))
-                            .font(.system(size: 8.5, weight: .semibold))
+                            .font(.system(size: Typo.Step.micro, weight: .semibold))
                             .foregroundStyle(Palette.chartViolet)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
@@ -563,7 +540,7 @@ private struct ProcessRow: View {
                 }
                 if !process.path.isEmpty {
                     Text(process.path)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(Typo.microMono)
                         .foregroundStyle(Palette.inkFaint)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -572,19 +549,19 @@ private struct ProcessRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("\(process.pid)")
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(size: Typo.Step.overline, design: .monospaced))
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 52, alignment: .trailing)
 
             Text(Bytes.formatMemory(process.memory))
-                .font(.system(size: 11.5, design: .rounded))
+                .font(.system(size: Typo.Step.caption, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(sort == .memory ? Palette.ink : Palette.inkSecondary)
                 .contentTransition(.numericText())
                 .frame(width: 78, alignment: .trailing)
 
             Text(startedText)
-                .font(.system(size: 10.5, design: .rounded))
+                .font(.system(size: Typo.Step.caption, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(sort == .started ? Palette.ink : Palette.inkSecondary)
                 .frame(width: 92, alignment: .trailing)
@@ -598,7 +575,7 @@ private struct ProcessRow: View {
                 )
                 .frame(width: 52)
                 Text(String(format: "%.1f%%", process.cpu))
-                    .font(.system(size: 11.5, design: .rounded))
+                    .font(.system(size: Typo.Step.caption, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(sort == .cpu ? Palette.ink : Palette.inkSecondary)
                     .contentTransition(.numericText())
@@ -610,7 +587,7 @@ private struct ProcessRow: View {
                 if hovering {
                     Button(action: onReveal) {
                         Image(systemName: "folder")
-                            .font(.system(size: 10.5))
+                            .font(.system(size: Typo.Step.caption))
                             .foregroundStyle(Palette.flow)
                     }
                     .buttonStyle(.plain)
@@ -619,7 +596,7 @@ private struct ProcessRow: View {
 
                     Button(action: onEnd) {
                         Image(systemName: "xmark.octagon")
-                            .font(.system(size: 10.5))
+                            .font(.system(size: Typo.Step.caption))
                             .foregroundStyle(Palette.danger)
                     }
                     .buttonStyle(.plain)
@@ -706,7 +683,7 @@ private struct ProcessIcon: View {
                 .frame(width: 18, height: 18)
         } else {
             Image(systemName: process.isSystem ? "gearshape.fill" : "terminal.fill")
-                .font(.system(size: 10))
+                .font(.system(size: Typo.Step.overline))
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 18, height: 18)
         }

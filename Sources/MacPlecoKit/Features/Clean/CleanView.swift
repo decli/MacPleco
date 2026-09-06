@@ -17,7 +17,12 @@ struct CleanView: View {
                     blockedBanner.rises(1)
                     categoryList
                 case .finished(let bytes, let trashed, let erased):
-                    FinishedCard(bytes: bytes, trashed: trashed, erased: erased) {
+                    FinishedCard(
+                        bytes: bytes,
+                        trashed: trashed,
+                        erased: erased,
+                        skipped: clean.lastSkipped
+                    ) {
                         clean.dismissResult()
                     }
                     .rises(0)
@@ -58,17 +63,17 @@ struct CleanView: View {
                 HStack(alignment: .top, spacing: Space.xl) {
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text(t("已选择", "Selected"))
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(Typo.label)
                             .foregroundStyle(Palette.inkTertiary)
                         HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
                             let parts = Bytes.split(clean.selectedSize)
                             Text(parts.number)
-                                .font(.system(size: 44, weight: .bold, design: .rounded))
+                                .font(Typo.hero)
                                 .monospacedDigit()
                                 .foregroundStyle(Palette.ink)
                                 .contentTransition(.numericText())
                             Text(parts.unit)
-                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .font(Typo.cardTitle)
                                 .foregroundStyle(Palette.inkSecondary)
                         }
                         Text(
@@ -77,7 +82,7 @@ struct CleanView: View {
                                 "\(clean.selectedCount) items · \(Bytes.format(clean.totalSize)) available in total"
                             )
                         )
-                        .font(.system(size: 12))
+                        .font(Typo.labelPlain)
                         .foregroundStyle(Palette.inkSecondary)
                     }
 
@@ -103,7 +108,7 @@ struct CleanView: View {
         } label: {
             HStack(spacing: Space.sm) {
                 Image(systemName: clean.permanentDelete ? "trash.slash" : "trash")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: Typo.Step.body, weight: .semibold))
                 Text(
                     clean.permanentDelete
                         ? t("永久删除 \(Bytes.format(clean.selectedSize))", "Erase \(Bytes.format(clean.selectedSize))")
@@ -132,7 +137,7 @@ struct CleanView: View {
             withAnimation(.smooth(duration: 0.25)) { action() }
         }
         .buttonStyle(.plain)
-        .font(.system(size: 11.5, weight: .medium))
+        .font(Typo.label)
         .foregroundStyle(Palette.flow)
         .disabled(clean.isBusy)
     }
@@ -140,7 +145,7 @@ struct CleanView: View {
     private var reassurance: some View {
         HStack(spacing: Space.md) {
             Image(systemName: clean.selectionIncludesPermanent ? "exclamationmark.triangle.fill" : "arrow.uturn.backward.circle.fill")
-                .font(.system(size: 13))
+                .font(.system(size: Typo.Step.body))
                 .foregroundStyle(clean.selectionIncludesPermanent ? Palette.caution : Palette.aqua)
 
             Text(
@@ -154,7 +159,7 @@ struct CleanView: View {
                         "Everything goes to the Trash first, so anything removed by mistake can be put back."
                       )
             )
-            .font(.system(size: 12))
+            .font(Typo.labelPlain)
             .foregroundStyle(Palette.inkSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -165,7 +170,7 @@ struct CleanView: View {
                 set: { clean.permanentDelete = $0 }
             )) {
                 Text(t("跳过废纸篓", "Skip the Trash"))
-                    .font(.system(size: 11))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkSecondary)
             }
             .toggleStyle(.switch)
@@ -187,7 +192,7 @@ struct CleanView: View {
                             .fill(Palette.caution.opacity(0.16))
                             .frame(width: 30, height: 30)
                         Image(systemName: "pause.circle.fill")
-                            .font(.system(size: 14))
+                            .font(.system(size: Typo.Step.subhead))
                             .foregroundStyle(Palette.caution)
                     }
                     VStack(alignment: .leading, spacing: 2) {
@@ -197,10 +202,10 @@ struct CleanView: View {
                                 "Quit these apps to reclaim another \(Bytes.format(clean.blockedBytes))"
                             )
                         )
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(.system(size: Typo.Step.body, weight: .semibold))
                         .foregroundStyle(Palette.ink)
                         Text(clean.blockedApps.prefix(6).map(\.name).joined(separator: " · "))
-                            .font(.system(size: 11))
+                            .font(Typo.caption)
                             .foregroundStyle(Palette.inkSecondary)
                             .lineLimit(1)
                     }
@@ -267,14 +272,14 @@ private struct CategoryCard: View {
                             .fill(category.safety.tint.opacity(0.14))
                             .frame(width: 34, height: 34)
                         Image(systemName: category.symbol)
-                            .font(.system(size: 15))
+                            .font(.system(size: Typo.Step.subhead))
                             .foregroundStyle(category.safety.tint)
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: Space.sm) {
                             Text(category.title)
-                                .font(.system(size: 14.5, weight: .semibold))
+                                .font(Typo.subhead)
                                 .foregroundStyle(Palette.ink)
                             SafetyChip(category.safety)
                             if category.safety == .safe, category.flaggedCount > 0 {
@@ -284,12 +289,12 @@ private struct CategoryCard: View {
                                         "\(category.flaggedCount) need a look"
                                     )
                                 )
-                                .font(.system(size: 10))
+                                .font(.system(size: Typo.Step.overline))
                                 .foregroundStyle(Palette.caution)
                             }
                         }
                         Text(category.consequence)
-                            .font(.system(size: 11.5))
+                            .font(Typo.caption)
                             .foregroundStyle(Palette.inkSecondary)
                             .lineLimit(1)
                     }
@@ -298,7 +303,7 @@ private struct CategoryCard: View {
 
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(Bytes.format(category.selectedSize))
-                            .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                            .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(category.selectedSize > 0 ? Palette.ink : Palette.inkTertiary)
                             .contentTransition(.numericText())
@@ -308,13 +313,13 @@ private struct CategoryCard: View {
                                 "\(category.selectedCount)/\(category.items.count) · \(Bytes.format(category.totalSize)) total"
                             )
                         )
-                        .font(.system(size: 10.5))
+                        .font(Typo.caption)
                         .monospacedDigit()
                         .foregroundStyle(Palette.inkTertiary)
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: Typo.Step.caption, weight: .semibold))
                         .foregroundStyle(Palette.inkTertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
@@ -370,7 +375,7 @@ private struct ItemRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Space.sm) {
                     Text(item.title)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(Typo.label)
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     if item.safety != .safe {
@@ -379,12 +384,12 @@ private struct ItemRow: View {
                 }
                 if let statusText {
                     Text(statusText)
-                        .font(.system(size: 10.5))
+                        .font(Typo.caption)
                         .foregroundStyle(Palette.inkTertiary)
                         .lineLimit(1)
                 }
                 Text(verbatim: item.path)
-                    .font(.system(size: 9.5, design: .monospaced))
+                    .font(Typo.microMono)
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(2)
                     .truncationMode(.middle)
@@ -396,7 +401,7 @@ private struct ItemRow: View {
 
             Button(action: revealInFinder) {
                 Label(t("访达", "Finder"), systemImage: "folder")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(Typo.captionStrong)
             }
             .buttonStyle(.bordered)
             .controlSize(.mini)
@@ -405,7 +410,7 @@ private struct ItemRow: View {
             .accessibilityLabel(t("在访达中显示 \(item.title)", "Show \(item.title) in Finder"))
 
             Text(Bytes.format(item.size))
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: Typo.Step.label, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.inkSecondary)
                 .frame(minWidth: 68, alignment: .trailing)
@@ -456,7 +461,7 @@ private struct ItemRow: View {
                 .frame(width: 18, height: 18)
         } else {
             Image(systemName: "folder")
-                .font(.system(size: 12))
+                .font(.system(size: Typo.Step.label))
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 18, height: 18)
         }
@@ -473,12 +478,12 @@ private struct ScanningCard: View {
             VStack(alignment: .leading, spacing: Space.lg) {
                 HStack(spacing: Space.md) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 18))
+                        .font(.system(size: Typo.Step.cardTitle))
                         .foregroundStyle(Palette.aqua)
                         .breathing(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(model.progress?.stage ?? t("正在检查…", "Looking around…"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(Typo.subhead)
                             .foregroundStyle(Palette.ink)
                         Text(
                             t(
@@ -486,7 +491,7 @@ private struct ScanningCard: View {
                                 "Only reading sizes — nothing is changed in this step."
                             )
                         )
-                        .font(.system(size: 11.5))
+                        .font(Typo.caption)
                         .foregroundStyle(Palette.inkSecondary)
                     }
                     Spacer()
@@ -534,10 +539,10 @@ private struct CleaningVeil: View {
                 }
 
                 Text(t("正在把选中的内容移入废纸篓…", "Moving the selection to the Trash…"))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
                     .foregroundStyle(Palette.ink)
                 Text(t("马上就好，不用盯着。", "Almost there — no need to watch."))
-                    .font(.system(size: 12))
+                    .font(Typo.labelPlain)
                     .foregroundStyle(Palette.inkSecondary)
             }
             .padding(Space.xxl)
@@ -554,6 +559,10 @@ private struct FinishedCard: View {
     let bytes: Int64
     let trashed: Int
     let erased: Int
+    /// Apps that started up between the scan and the click. Their caches were
+    /// left alone, and saying so is the difference between a number that is
+    /// low and a number that is wrong.
+    let skipped: [BlockedApp]
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -573,14 +582,29 @@ private struct FinishedCard: View {
                             let eased = reduceMotion ? 1 : min(1, 1 - pow(1 - min(1, elapsed / duration), 3))
                             let shown = Int64(Double(bytes) * eased)
                             Text(t("释放了 \(Bytes.format(shown))", "Freed \(Bytes.format(shown))"))
-                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                                .font(Typo.metric)
                                 .monospacedDigit()
                                 .foregroundStyle(Palette.ink)
                         }
                         Text(detail)
-                            .font(.system(size: 12.5))
+                            .font(Typo.labelPlain)
                             .foregroundStyle(Palette.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        if !skipped.isEmpty {
+                            HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                                Image(systemName: "pause.circle")
+                                    .font(.system(size: Typo.Step.caption, weight: .medium))
+                                    .foregroundStyle(Palette.caution)
+                                    .frame(width: 13, height: 13)
+                                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
+                                Text(skippedDetail)
+                                    .font(Typo.caption)
+                                    .foregroundStyle(Palette.inkSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.top, Space.xs)
+                        }
                     }
                     Spacer(minLength: 0)
                 }
@@ -622,7 +646,7 @@ private struct FinishedCard: View {
                     )
                     .rotationEffect(.degrees(-90))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: Typo.Step.metric, weight: .bold))
                     .foregroundStyle(Palette.aqua)
                     .scaleEffect(ringProgress >= 1 ? 1 : 0.4 + 0.6 * ringProgress)
                     .opacity(ringProgress)
@@ -657,6 +681,16 @@ private struct FinishedCard: View {
         return t(
             "\(trashed) 项已移到废纸篓，右键选「放回原处」即可恢复。",
             "\(trashed) items moved to the Trash — right-click and choose Put Back to restore any of them."
+        )
+    }
+
+    private var skippedDetail: String {
+        let names = skipped.map(\.name).joined(separator: "、")
+        let namesEN = skipped.map(\.name).joined(separator: ", ")
+        let bytes = Bytes.format(skipped.reduce(0) { $0 + $1.bytes })
+        return t(
+            "跳过了 \(names)：扫描之后它启动了，\(bytes) 留在原处。退出它再清理一次即可。",
+            "Skipped \(namesEN): it started up after the scan, so \(bytes) was left in place. Quit it and clean again."
         )
     }
 }

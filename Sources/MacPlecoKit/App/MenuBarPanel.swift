@@ -44,11 +44,11 @@ struct MenuBarPanel: View {
                     .fill(Palette.aquaSweep)
                     .frame(width: 22, height: 22)
                 Image(systemName: "fish.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: Typo.Step.overline, weight: .semibold))
                     .foregroundStyle(.white)
             }
             Text("MacPleco")
-                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .font(.system(size: Typo.Step.body, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
             Spacer()
             if model.ledger.totalRuns > 0 {
@@ -58,7 +58,7 @@ struct MenuBarPanel: View {
                         "\(Bytes.format(model.ledger.totalBytes)) freed"
                     )
                 )
-                .font(.system(size: 10.5))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.aqua)
             }
         }
@@ -68,11 +68,11 @@ struct MenuBarPanel: View {
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack(alignment: .firstTextBaseline) {
                 Text(t("可用空间", "Free space"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Typo.captionStrong)
                     .foregroundStyle(Palette.inkTertiary)
                 Spacer()
                 Text(Bytes.format(model.storage.available))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: Typo.Step.subhead, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
             }
@@ -84,7 +84,7 @@ struct MenuBarPanel: View {
             if model.clean.hasScanned, model.clean.totalSize > 0 {
                 HStack(spacing: Space.xs) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 9))
+                        .font(.system(size: Typo.Step.micro))
                     Text(
                         t(
                             "其中 \(Bytes.format(model.clean.totalSize)) 可以清理",
@@ -92,7 +92,7 @@ struct MenuBarPanel: View {
                         )
                     )
                 }
-                .font(.system(size: 11))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.aqua)
             }
         }
@@ -127,14 +127,14 @@ struct MenuBarPanel: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: Space.xs) {
                 Image(systemName: symbol)
-                    .font(.system(size: 9))
+                    .font(.system(size: Typo.Step.micro))
                     .foregroundStyle(Palette.aqua)
                 Text(label)
-                    .font(.system(size: 9.5))
+                    .font(.system(size: Typo.Step.overline))
                     .foregroundStyle(Palette.inkTertiary)
             }
             Text(value)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
@@ -166,7 +166,7 @@ struct MenuBarPanel: View {
                     open(destination: nil)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11.5))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.flow)
 
                 Spacer()
@@ -175,7 +175,7 @@ struct MenuBarPanel: View {
                     NSApplication.shared.terminate(nil)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11.5))
+                .font(Typo.caption)
                 .foregroundStyle(Palette.inkTertiary)
             }
         }

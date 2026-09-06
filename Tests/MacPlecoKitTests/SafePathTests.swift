@@ -189,4 +189,111 @@ final class SafePathTests: XCTestCase {
     func testOrdinaryCachesAreNotBlocked() {
         XCTAssertFalse(CleanCatalog.isBlocked(url("\(home)/Library/Caches/com.example.App")))
     }
+
+    func testModelDownloadsUnderDotCacheAreNeverOffered() {
+        // The weight heuristic only sees the path a rule matched, and these are
+        // matched at their top level, so blocking has to name them.
+        for path in [
+            "\(home)/.cache/huggingface",
+            "\(home)/.cache/huggingface/hub/models--meta-llama",
+            "\(home)/.cache/torch",
+            "\(home)/.cache/lm-studio"
+        ] {
+            XCTAssertTrue(
+                CleanCatalog.isBlocked(url(path)),
+                "\(path) holds model downloads and must never be offered"
+            )
+        }
+    }
+
+    func testPoetryIsOfferedByCacheButNeverWhole() {
+        // Removal takes the whole matched directory, so offering ~/.cache/pypoetry
+        // would take the virtual environments with it.
+        XCTAssertTrue(CleanCatalog.isBlocked(url("\(home)/.cache/pypoetry")))
+        XCTAssertFalse(CleanCatalog.isBlocked(url("\(home)/.cache/pypoetry/artifacts")))
+        XCTAssertFalse(CleanCatalog.isBlocked(url("\(home)/.cache/pypoetry/cache")))
+    }
+
+    // MARK: - Catalog rules
+
+    /// What the scanner does: expand in order, keep the first rule to reach a
+    /// path. `pattern` matches a path of the same depth, `*` matching any one
+    /// component.
+    private func rule(claiming path: String) -> CleanRule? {
+        CleanCatalog.rules.first { rule in
+            let pattern = NSString(string: rule.pattern).expandingTildeInPath
+                .split(separator: "/")
+            let components = path.split(separator: "/")
+            guard pattern.count == components.count else { return false }
+            return !zip(pattern, components).contains { $0 != "*" && $0 != $1 }
+        }
+    }
+
+    private func handling(_ path: String) -> (safety: Safety, selected: Bool)? {
+        guard let rule = rule(claiming: path) else { return nil }
+        let policy = CleanCatalog.policy(for: rule.category)
+        return (rule.safety ?? policy.safety, rule.selectedByDefault ?? policy.selected)
+    }
+
+    func testNoRuleIsShadowedByAnEarlierOne() {
+        // A rule written after a sweep that covers it can never fire: the
+        // scanner has already claimed every path it would match, so its
+        // category, label and safety are silently lost.
+        let patterns = CleanCatalog.rules.map {
+            NSString(string: $0.pattern).expandingTildeInPath.split(separator: "/").map(String.init)
+        }
+        for (index, mine) in patterns.enumerated() {
+            for earlier in patterns[0..<index] {
+                guard earlier.count == mine.count else { continue }
+                let covered = !zip(earlier, mine).contains { $0 != $1 && $0 != "*" }
+                XCTAssertFalse(
+                    covered,
+                    "\(CleanCatalog.rules[index].pattern) can never fire: "
+                        + "\(earlier.joined(separator: "/")) claims every path it matches"
+                )
+            }
+        }
+    }
+
+    func testUnknownDotCacheEntriesAreOfferedForReviewOnly() {
+        // ~/.cache is a shared drawer, not one tool's cache: whatever the sweep
+        // finds there has not been vouched for by name.
+        let handling = handling("\(home)/.cache/some-unknown-tool")
+        XCTAssertEqual(handling?.safety, .review)
+        XCTAssertEqual(handling?.selected, false)
+    }
+
+    func testNamedDotCacheEntriesAreSafeToRemove() {
+        for path in ["pip", "uv", "go-build", "pre-commit"] {
+            let handling = handling("\(home)/.cache/\(path)")
+            XCTAssertEqual(handling?.safety, .safe, "~/.cache/\(path) is a rebuildable cache")
+            XCTAssertEqual(handling?.selected, true)
+        }
+    }
+
+    func testBrowserDownloadsAreTreatedTheSameInEitherCacheLocation() {
+        // Same browsers, same slow re-download, whichever directory the tool
+        // happened to put them in.
+        for path in ["\(home)/.cache/ms-playwright", "\(home)/Library/Caches/ms-playwright"] {
+            XCTAssertEqual(handling(path)?.safety, .review, path)
+            XCTAssertEqual(handling(path)?.selected, false, path)
+        }
+    }
+
+    /// Naming a store must match on a path boundary, not a string prefix.
+    /// `hasPrefix` on the bare path would swallow `~/.cachehuggingface` and
+    /// `~/.cache/huggingface-notes` along with the store itself.
+    func testNamedStoresMatchOnAPathBoundary() {
+        for path in [
+            "\(home)/.cache/huggingface-notes",
+            "\(home)/.cachehuggingface",
+            "\(home)/.cache/torch-utils",
+            "\(home)/.cache/pypoetry-old"
+        ] {
+            XCTAssertFalse(
+                CleanCatalog.isBlocked(url(path)),
+                "\(path) is not the store it resembles and must stay offerable"
+            )
+        }
+    }
 }
