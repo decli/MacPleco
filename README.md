@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/Swift-6-orange?style=flat-square" alt="Swift 6">
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="GPL-3.0"></a>
   </p>
-  <img src="docs/screenshots/overview.jpg" alt="The MacPleco Overview page: a disk gauge showing 124 GB reclaimable, one Start cleaning button, and four cards for disk, installed apps, uptime and chip">
+  <img src="docs/screenshots/overview.jpg" alt="The MacPleco Overview page: a porthole gauge reading 94.9 GB reclaimable, a filled Start cleaning button beside an outlined See what's there, and four equal cards for disk, installed apps, uptime and chip">
 </div>
 
 ---
@@ -46,7 +46,7 @@ the Trash. Apps holding a cache open are surfaced with the bytes they occupy.
 Every item shows its full path and can be revealed in Finder from its row or
 context menu before it is selected.
 
-![The Clean page: categories with plain-language descriptions, per-category sizes, and a banner listing apps to quit for more space](docs/screenshots/clean.jpg)
+![The Clean page: the selected total set large above a Move to Trash button, a banner listing apps to quit for more space, and categories with plain-language descriptions and their own sizes](docs/screenshots/clean.jpg)
 
 **Apps** — Every installed app with its size and last-opened date. Uninstalling
 first shows the complete plan: the bundle plus every preference, container and
@@ -56,7 +56,7 @@ every leftover, any of which can still be unticked before the single
 confirmation. Login items are included too, sortable by name, by scope, or by
 which of them actually run at login.
 
-![The Apps page: installed apps sorted by longest unused, each with size, last-used date and an Uninstall button](docs/screenshots/apps.jpg)
+![The Apps page: a search narrowing the list, a filter row whose controls are all one height, and rows carrying size, last-used date and an outlined Uninstall button](docs/screenshots/apps.jpg)
 
 **Space** — A full-width squarified map with legible adaptive labels, hover-
 linked ranking cards, breadcrumbs and long-tail consolidation. Drill into a
@@ -67,7 +67,7 @@ to 3.1s, reporting the same total. The large-file view lists files over 100 MB
 with their absolute paths, an always-visible Finder button, path copying and a
 reversible Move to Trash action.
 
-![The Space page: a squarified treemap where each folder has its own colour, with the largest twelve items listed as cards below](docs/screenshots/space.jpg)
+![The Space page: a full-width squarified treemap of the home folder, each folder in its own colour with its size and share written on the tile, above a breadcrumb reading 478 GB and a legend for folders, files and consolidated items](docs/screenshots/space.jpg)
 
 **Tune-Up** — Eight repairs for specific symptoms: a broken Open With menu,
 blank preview thumbnails, tofu boxes instead of text, stale DNS, white page
@@ -75,7 +75,7 @@ icons, `.DS_Store` files on shared drives, off-screen windows and a stuck
 Finder. Every one has a visible Run button of its own, and several can be ticked
 and run together. Nothing is pre-selected.
 
-![The Tune-Up page: eight repairs, each naming the symptom it fixes, none pre-selected](docs/screenshots/tune-up.jpg)
+![The Tune-Up page: repairs listed as equal-height rows, each naming the symptom it fixes and carrying its own Run button, none pre-selected](docs/screenshots/tune-up.jpg)
 
 **Monitor** — Live vitals in four equal cards: CPU split into app versus system
 time, memory split into app, wired and compressed, whole-device GPU load, and
@@ -88,10 +88,16 @@ politely first, forcibly only if you say so. macOS exposes no per-process GPU
 share to an unprivileged app, so that is reported for the device as a whole
 instead of being faked per row. Sampling stops when you leave the section.
 
-![The Monitor page: four equal gauge cards for CPU, memory, GPU and network, a machine strip with per-core load, and a searchable process table](docs/screenshots/monitor.jpg)
+![The Monitor page scrolled to the GPU and network gauges, each with its own legend, above a machine strip showing per-core load and a searchable process table sorted by CPU](docs/screenshots/monitor.jpg)
 
 **Menu bar** — A small fish that answers “how full is my disk?” at a glance,
 with live vitals and one click into cleaning.
+
+**Settings** — Language, appearance and the menu-bar fish, plus the Full Disk
+Access status with a shortcut to grant it. Both language and appearance take
+effect immediately; nothing here needs a restart.
+
+![The MacPleco Settings window: segmented pickers for language and appearance, a switch for the menu bar fish, the Full Disk Access status, and an about section naming the GPL-3.0 licence and the Mole project that inspired it](docs/screenshots/settings.jpg)
 
 ## Install
 
