@@ -121,17 +121,17 @@ first time.
 ### The standard ships with the app · 标准随应用一起发布
 
 `docs/ui-standard.md` is the rulebook — tokens, the action grammar, the
-per-page checklist, and the acceptance numbers. `docs/ui-standard.html` draws
-every size at one pixel per point, so a table of measurements can be checked
-against a screenshot rather than trusted. All 21 acceptance numbers measure
+per-page checklist, and the acceptance numbers — and it states what the code
+actually does rather than what was proposed. All 21 acceptance numbers measure
 correct, verified with a layout probe compiled into the module and run at
 1200×800 in Chinese. `scripts/check-ui-standard.sh` runs first in CI so none of
-it drifts back.
+it drifts back, and `docs/ui-standard-review.html` archives the document as it
+was reviewed.
 
-`docs/ui-standard.md` 是规则正文——令牌、动作语法、逐页清单和验收数字。
-`docs/ui-standard.html` 把每个尺寸按 1 像素 = 1 点画出来，尺寸表可以直接跟截图比对，
-而不必选择相信它。21 项验收数字全部量到，用的是编进模块的布局探针，1200×800 中文窗口。
-`scripts/check-ui-standard.sh` 在 CI 第一步拦截回流。
+`docs/ui-standard.md` 是规则正文——令牌、动作语法、逐页清单和验收数字，而且写的是代码
+实际的做法，不是当初的提案。21 项验收数字全部量到，用的是编进模块的布局探针，1200×800
+中文窗口。`scripts/check-ui-standard.sh` 在 CI 第一步拦截回流，
+`docs/ui-standard-review.html` 存档了送审时的那一版文档。
 
 ### Also · 其他
 

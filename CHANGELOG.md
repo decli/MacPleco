@@ -50,9 +50,10 @@ page.
   durations replace thirteen, and readings set the unit apart from the
   quantity. `scripts/check-ui-standard.sh` runs first in CI so none of it
   drifts back.
-- The standard ships with the app: `docs/ui-standard.md` is the rulebook and
-  `docs/ui-standard.html` draws every size at one pixel per point, so a table
-  of measurements can be checked against a screenshot instead of trusted.
+- The standard ships with the app. `docs/ui-standard.md` is the rulebook —
+  tokens, the action grammar, the per-page checklist and the acceptance
+  numbers — and `docs/ui-standard-review.html` archives the document as it was
+  reviewed.
 
 - 界面按 v2.0 界面标准（`docs/ui-standard.md`）重建。控件高度收成四档——行内 24、
   **默认 28**、卡内主动作 36、每页唯一的号召动作 44。默认档是 28 而不是 24：中文字身
@@ -78,8 +79,8 @@ page.
   都画。此前「看看有哪些」在浅色地上根本看不出边界。
 - 一个徽章取代九种写法，一套行几何取代八种行高，六档动效取代十三种时长，数值与单位
   分开排。`scripts/check-ui-standard.sh` 在 CI 第一步拦截回流。
-- 标准随应用一起发布：`docs/ui-standard.md` 是规则正文，`docs/ui-standard.html` 把每个
-  尺寸按 1 像素 = 1 点画出来，尺寸表可以直接跟截图比对，而不必选择相信它。
+- 标准随应用一起发布：`docs/ui-standard.md` 是规则正文——令牌、动作语法、逐页清单与验收
+  数字；`docs/ui-standard-review.html` 存档了送审时的那一版文档。
 
 ## [0.3.6] - 2026-09-07
 

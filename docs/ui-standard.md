@@ -233,12 +233,16 @@
 
 | 意图 | 形态 | 档位 | 例 | 对比度 |
 |---|---|---|---|---|
-| **可逆 · 好事** | 实心 `aquaSweep`，白字 | `hero` 44 | 开始清理、清理页"移到废纸篓" | 白 / aqua = 4.9:1 ✓ |
+| **可逆 · 好事** | 实心 `goFill`，配 `onAccent` | `hero` 44 | 开始清理、清理页"移到废纸篓" | 4.64:1 浅 / 5.68:1 深 ✓ |
 | **可逆 · 中性** | 描边 `ink` | `standard` 28 / `compact` 24 | 大文件"移到废纸篓"、条目行 | ink / 浅底 ✓ |
 | **不可逆 · 提议** | 描边 `danger` + 6% 底 | `standard` 28 / `compact` 24 | 卸载、卸载所选、移除登录项 | danger / 浅底 = 5.1:1 ✓ |
-| **不可逆 · 确认** | 实心 `danger` 深值 `#C0342F`，白字 | `standard` 28 | Sheet / Alert 确认键 | 白 / #C0342F = 4.6:1 ✓ |
+| **不可逆 · 确认** | 实心 `dangerSolid`（浅 `#C0342F` / 深 `#8F2C28`），白字 | `standard` 28 | Sheet / Alert 确认键 | 5.57:1 浅 / 8.21:1 深 ✓ |
 
 对照现状：白字压 `danger` 12% 玻璃 tint = 约 **2.6:1**，不达标。实心确认键必须用 `danger` 的**深值**，不是玻璃 tint——玻璃 tint 是那颗粉红按钮对比度不足的直接原因。
+
+**关于「可逆 · 好事」这一行：本标准最初写的是「实心 `aquaSweep`，白字，白 / aqua = 4.9:1」，那是错的。**
+用 `Theme.swift` 的实际色值算，白字压 `aquaSweep` 浅色 2.62:1、深色 1.40:1——比它要修的那颗粉红按钮
+（1.39:1）好不了多少。渐变承载不了文字。上表已按代码实际实现修正，原委见 §11.2。
 
 ### 4.3 可逆的删除不该染红
 
@@ -248,7 +252,18 @@
 
 在浅色"深水"地上，`.ultraThinMaterial` + 0.5pt hairline 几乎看不出边界。
 
-**任何可点的玻璃控件必须同时具备：白色填充底 ≥ 66% · 描边 ≥ 16% · 文字不低于 `ink`。**
+**任何可点的玻璃控件必须同时具备：足够不透明的填充底 · 描边 ≥ 16% · 文字不低于 `ink`。**
+
+「足够不透明」在两种外观下是两个方向的要求：浅色地上要往白里加，深色地上要往亮里加。
+代码实现（`Palette.controlFill` / `controlStroke`，由 `GlassLevel.interactive` 统一施加）：
+
+| 外观 | 填充 | 描边 | 描边宽度 |
+|---|---|---|---|
+| 浅色 | 白 **72%**（下限 66%） | 黑 **20%**（下限 16%） | 1pt |
+| 深色 | `#E8F2FA` **14%** | 白 **24%** | 1pt |
+
+深色下不能照搬 66%：那会把控件刷成近白。规则的实质是「控件必须比它所在的地面更实，
+且边界画得出来」，两个方向各取各的值。非交互面板仍用 0.5pt `hairlineStrong`。
 
 - 非交互的玻璃面板可以更透（卡片 55%），可点的不行。
 - 玻璃控件不得直接压在 aurora 色场最亮处；英雄卡内例外（卡本身已是一层玻璃）。
@@ -309,7 +324,7 @@
 
 | 角色 | 形态 | 可用档位 |
 |---|---|---|
-| `Primary` | 实心，白字，仅 `aqua`（`confirm` 意图在确认界面内可用 `danger` 深值） | 28 / 36 / 44 |
+| `Primary` | 实心 `goFill` + `onAccent`（`confirm` 意图在确认界面内用 `dangerSolid` + 白字） | 28 / 36 / 44 |
 | `Secondary` | 玻璃胶囊 + 描边，字色 = 意图语义色 | 24 / 28 / 36 / 44 |
 | `Tertiary` | 纯文字，`flow` 或 `inkTertiary` | 随所在文字行 |
 | 图标按钮 | 无容器，命中区 24×24，`Glyph.caption` 11 | 24 |
@@ -427,9 +442,13 @@ public enum Control {
     public static let hero: CGFloat     = 44  // 每页最多一组
 
     /// 系统控件对齐。
-    public static func controlSize(for height: CGFloat) -> ControlSize {
+    public static func size(for height: CGFloat) -> ControlSize {
         height >= emphasis ? .extraLarge : (height >= standard ? .large : .small)
     }
+
+    /// 档位决定字号与内边距，调用方传不了。
+    public static func actionFont(for height: CGFloat) -> Font { … }
+    public static func horizontalPadding(for height: CGFloat) -> CGFloat { … }
 }
 
 /// SF Symbol 的点尺寸。不再借用 Typo.Step。
@@ -494,9 +513,9 @@ public struct ActionButtonStyle: ButtonStyle {
 
     public func makeBody(configuration: Configuration) -> some View {
         // 形态由 intent 决定，调用方无法覆盖：
-        //   .go      → aquaSweep 实心，白字
-        //   .confirm → danger 深值 #C0342F 实心，白字（仅 inConfirmation）
-        //   其余     → 玻璃胶囊 + 描边（≥66% 白底 / ≥16% 描边），字色 = intent 语义色
+        //   .go      → goFill 实心，onAccent 字
+        //   .confirm → dangerSolid 实心，白字（仅 inConfirmation；否则退化成描边）
+        //   其余     → 玻璃胶囊 + 描边（见 §4.4 的可辨度下限），字色 = intent 语义色
         // 字号与内边距由 height 查表，不接受单独传参。
         //
         // assert(intent != .confirm || inConfirmation)
@@ -553,7 +572,7 @@ public struct Masthead<Trailing: View>: View {
 public struct PageTabs<S: Hashable>: View { … }  // 28 高，内容列左边线
 ```
 
-### 8.4 CI 拦截（五条）
+### 8.4 CI 拦截（`scripts/check-ui-standard.sh`，七条）
 
 ```bash
 P=Sources/MacPlecoKit
@@ -567,10 +586,16 @@ grep -rnE 'cornerRadius: [0-9]' $P --include='*.swift' | grep -v Design/ && exit
 grep -rnE 'Space\.[a-z]+ [+-] ' $P && exit 1
 # 4 ✚ 页面不得自己写高度（高度只能来自 Control）
 grep -rnE '\.frame\((height|minHeight): [0-9]' $F && exit 1
-# 5 ✚ 破坏性动作不得实心
-grep -rn 'ActionButtonStyle(.*tint:' $P && exit 1
-grep -rn 'PrimaryButtonStyle(tint: .danger' $P && exit 1
+# 5 ✚ 页面不得引用原始字号阶梯
+grep -rn 'Typo\.Step' $F && exit 1
+# 6 ✚ 旧按钮样式不得回流
+grep -rn 'PrimaryButtonStyle\|GhostButtonStyle' $P && exit 1
+# 7 ✚ 调用方不得选颜色
+grep -rnE 'ActionButtonStyle\([^)]*tint:' $P && exit 1
+# 另外：每个用了 .confirm 的文件里必须出现 confirmationSurface()
 ```
+
+脚本会跳过注释行——本文件与设计系统的注释都点名引用了被禁的旧 API。
 
 ### 8.5 顺序
 
@@ -578,7 +603,7 @@ grep -rn 'PrimaryButtonStyle(tint: .danger' $P && exit 1
 2. **语义层**：`ActionIntent` + `ActionButtonStyle` + `confirmationSurface()`。单独一个 PR——它改变的是界面的语气，不是尺寸。
 3. **容器**：`Masthead`、`FilterRow`、`PageTabs`、`Badge`、`IconButton`；`SelectionBar` → 48、`SearchField` → 28、`TriStateBox` → 16、`CapacityBar` 只留 4 / 6。
 4. **页面**：报头（全部，一次改完最见效）→ 应用 → 清理 → 空间 → 优化 → 监控 → 设置 / 菜单栏 / Sheet。
-5. **拦截与验收**：5 条 grep 进 CI；探针量到 §9 的全部数字。
+5. **拦截与验收**：`scripts/check-ui-standard.sh` 进 CI 第一步；探针量到 §9 的全部数字。
 
 ---
 
@@ -600,26 +625,57 @@ grep -rn 'PrimaryButtonStyle(tint: .danger' $P && exit 1
 | 徽章高（标准 / 紧凑）· 复选框 | 18 / 16 · 16 |
 | 页内 `hero` 档按钮组 / 实心色块 | ≤ 1 / ≤ 1 |
 | **实心 `danger` 出现次数（主窗口）** | **0** |
-| CI 五条 grep | 全部 0 命中 |
+| `check-ui-standard.sh` 七条 | 全部 0 命中 |
 
 ---
 
-## 10. 还没定的三件事
+## 10. 三个悬而未决的问题，以及它们的结论
 
-1. **深色模式的实心 `danger` 底色。** 浅色用 `#C0342F`（白字 4.6:1）；深色下 `danger` 是 `#FF7A72`，实心配白字只有 2.1:1，需要改成深底 + `#FF9E98` 文字，或者深色下确认键也走描边。**倾向后者**——更一致。
-2. **监控页四张仪表卡的最小宽。** 统一到 224 后，中文图例在 1200 窗口下会更早换到两行形态。要么接受两行，要么给仪表卡单独一个 236 的例外。**倾向接受两行。**
-3. **"跳过废纸篓"开关的位置。** 它现在藏在摘要卡里，开启后主按钮就变成不可逆操作。按本标准，那颗按钮应该同时改文案、改形态、并要求二次确认——也可以更激进：把这个开关移到设置窗口，让主界面永远只有可逆动作。
+本节原是「还没定的三件事」。三件都已定，实现照此。
 
----
+### 10.1 深色模式的实心 `danger`
 
-## 附录 · 怎么量
+**结论：不走描边，用一个双外观都够深的填充。**
 
-沿用 v1.0 的探针方案：复制模块到临时目录，在要量的视图上加 `measure("名字")`（`onGeometryChange` 读 `.global` 坐标），用一个 `@main` 探针把 `RootView().environment(AppModel())` 装进 `NSHostingView`（`sceneBridgingOptions = [.all]` 才有系统工具栏），逐页切 `model.destination`，等数据到了再打印。要点：
+原本倾向「深色下确认键也走描边」，理由是更一致。没有采纳：那会让同一个确认动作在浅色下是实心、
+在深色下是描边，而在这套语法里**形态本身承载语义**——实心意味着「这是本界面唯一的、你已经确认过的动作」。
+让它随外观改变，等于让语义随外观改变。
 
-- 在真实窗口里量，不要另搭裸组件——内容（尤其中文）才是把布局撑坏的东西。
-- `.rises()` 的入场位移会让同一个视图出现两个坐标，取小的那个。
-- 网格列数依赖容器宽，1200 和 1600 各量一次。
-- **本版新增：基线要量 `.firstTextBaseline` 的全局 y，不是 frame 的中心 y。**
+原来的反对意见（"深色下 `danger` 是 `#FF7A72`，实心配白字只有 2.1:1"）针对的是直接拿 `danger` 当填充。
+专门的填充令牌不受这个限制：
+
+| 外观 | `dangerSolid` | 白字对比度 |
+|---|---|---|
+| 浅色 | `#C0342F` | 5.57:1 |
+| 深色 | `#8F2C28` | 8.21:1 |
+
+同一处思路也解决了 `.go`：见 §4.2 与 §11.2。
+
+### 10.2 监控页四张仪表卡的最小宽
+
+**结论：统一到 224，接受中文图例在窄窗口下换成两行形态。**
+
+采纳原倾向。给仪表卡开一个 236 的例外，等于让两个页面的同一种卡在不同宽度换行，
+而 `LegendRow` 的四段降级本来就是为这件事写的（见 §6.4 与组件注释）。
+代价是默认 1200 窗口下内存卡的图例是两行——这是设计过的形态，不是溢出。
+
+### 10.3 「跳过废纸篓」开关的位置
+
+**结论：开关留在摘要卡里，但那颗按钮随开关改变意图。**
+
+采纳 §7 的写法而不是「移进设置窗口」的激进版。移走开关会让一个真实存在的能力更难找到，
+而问题从来不是开关在哪，是**同一次点击在两种状态下后果不同却长得一样**。
+
+开关打开后，那颗按钮同时改四样东西：
+
+| | 关（可逆） | 开（不可逆） |
+|---|---|---|
+| 文案 | 移到废纸篓 22.2 GB | 永久删除 22.2 GB |
+| 意图 | `.go` | `.destructive` |
+| 档位 | `hero` 44 实心 | `emphasis` 36 描边 |
+| 行为 | 直接执行 | 先弹确认 Sheet（唯一的实心 danger 在那里） |
+
+主界面因此仍然只有可逆动作会被直接执行。
 
 ---
 
@@ -649,7 +705,7 @@ grep -rn 'PrimaryButtonStyle(tint: .danger' $P && exit 1
 | 图标按钮命中区 | 24 | 24 |
 | 页内实心色块 | ≤ 1 | 概览 1、清理 1，其余 0 |
 | **实心 `danger` 出现次数（主窗口）** | **0** | **0** |
-| CI 五条 grep | 全部 0 命中 | 0 |
+| `check-ui-standard.sh` 七条 | 全部 0 命中 | 0 |
 
 两处在第一轮量出来不对，改了：
 
@@ -679,11 +735,10 @@ grep -rn 'PrimaryButtonStyle(tint: .danger' $P && exit 1
 
 同一处修正也套用在：品牌图标（白鱼压亮薄荷）、计数徽章、复选框的勾——它们此前都是白字压强调色渐变。
 
-### 11.3 §10 三个未决问题的结论
+### 11.3 §10 三个未决问题
 
-1. **深色模式的实心 `danger`。** 标准倾向「深色下确认键也走描边」。**没有采纳**：那会让同一个确认动作在两种外观下形态不同，而形态是这套语法里承载语义的部分。改为 `dangerSolid` 用一个双外观都够深的值（浅 #C0342F / 深 #8F2C28），两边都配白字，5.57:1 / 8.21:1。标准提出的反对意见（"深色下 danger 是 #FF7A72，实心配白字只有 2.1:1"）针对的是直接拿 `danger` 当填充，专门的深色令牌不受影响。
-2. **监控页仪表卡的最小宽。** 采纳标准的倾向：统一到 224，接受中文图例在窄窗口下换到两行形态。`LegendRow` 的四段降级本来就是为这件事写的。
-3. **「跳过废纸篓」开关的位置。** 采纳 §7 的写法而不是 §10 的激进版：开关留在摘要卡里，但打开后那颗按钮同时改文案（「永久删除」）、改形态（`hero` 实心 aqua → `emphasis` danger 描边）、改行为（不再直接执行，先弹确认 Sheet）。主界面因此仍然只有可逆动作会被直接执行。
+三个都已定，结论连同理由写在 §10 里，不在这里重复。摘要：深色确认键仍是实心（换用双外观都够深的
+`dangerSolid`），仪表卡统一 224 并接受两行图例，「跳过废纸篓」开关留在原处但让按钮随之改变意图。
 
 ### 11.4 落地清单
 
@@ -701,4 +756,17 @@ grep -rn 'PrimaryButtonStyle(tint: .danger' $P && exit 1
 
 - **紧凑表格行不遵守 72 的标题左边线。** 进程、清理条目、Sheet 残留用的是 8pt 内缩的紧凑几何，与标准行卡不是同一种行；§6.4 也是分开定义的。
 - **默认窗口下统计卡仍是 2×2。** 内容列 ≤ 908 时四卡两行，这是网格的既定行为，标准 §5.4 已写明，不是回归。
-- **无法在这台机器上截图核对。** `screencapture` 与 computer-use 的窗口截图都失败，所以视觉部分靠两条可计算的证据：探针量出的几何，和上面算出的对比度。像素级的观感仍需人眼确认。
+- **视觉核对已经做过，但设置窗口截不到。** 主窗口六个页面在浅色与深色下都逐页看过：意图切换（打开「跳过废纸篓」后按钮改文案、降档、改描边、弹确认）、深色下 `goFill` 配 `onAccent` 的实际观感、以及各行高与徽章。设置窗口的截图始终失败，所以深色模式是改 `com.macpleco.appearance` 偏好后重启验证的。`screencapture` 仍然不可用；computer-use 的 `app_screenshot` 对主窗口可用。
+
+---
+
+## 附录 · 怎么量
+
+沿用 v1.0 的探针方案：复制模块到临时目录，在要量的视图上加 `measure("名字")`（`onGeometryChange` 读 `.global` 坐标），用一个 `@main` 探针把 `RootView().environment(AppModel())` 装进 `NSHostingView`（`sceneBridgingOptions = [.all]` 才有系统工具栏），逐页切 `model.destination`，等数据到了再打印。要点：
+
+- 在真实窗口里量，不要另搭裸组件——内容（尤其中文）才是把布局撑坏的东西。
+- `.rises()` 的入场位移会让同一个视图出现两个坐标，取小的那个。
+- 网格列数依赖容器宽，1200 和 1600 各量一次。
+- **本版新增：基线要量 `.firstTextBaseline` 的全局 y，不是 frame 的中心 y。**
+
+---
