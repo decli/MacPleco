@@ -24,6 +24,14 @@ jobs:
           swift --version
           xcodebuild -version
 
+      # Cheapest gate first: the interface rules are grep-enforceable, and a
+      # violation here means the design system was bypassed rather than
+      # extended. See docs/ui-standard.md.
+      - name: Check UI standard
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/check-ui-standard.sh
+
       # The release/universal build is the gate, not a debug build. They do not
       # agree: a debug build passed while this one caught two actor-isolation
       # errors, because multi-arch routes through a different build system.

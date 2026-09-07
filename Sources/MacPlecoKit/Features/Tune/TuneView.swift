@@ -19,16 +19,16 @@ struct TuneView: View {
             )
         ) {
             actionBar.rises(0)
-            LazyVStack(spacing: Space.md) {
+            LazyVStack(spacing: Space.sm) {
                 ForEach(Array(tune.tasks.enumerated()), id: \.element.id) { index, task in
-                    TaskCard(
+                    TaskRow(
                         task: task,
                         isSelected: tune.selected.contains(task.id),
                         isRunning: tune.runningTaskID == task.id,
                         isBusy: tune.isRunning,
                         result: tune.results[task.id],
                         onToggle: {
-                            withAnimation(.smooth(duration: 0.2)) { tune.toggle(task.id) }
+                            withAnimation(Motion.state) { tune.toggle(task.id) }
                         },
                         onRunAlone: { Task { await tune.run(task) } }
                     )
@@ -50,16 +50,14 @@ struct TuneView: View {
             totalCount: tune.tasks.count,
             allSelected: tune.allSelected,
             onToggleAll: {
-                withAnimation(.smooth(duration: 0.25)) { tune.toggleSelectAll() }
+                withAnimation(Motion.state) { tune.toggleSelectAll() }
             }
         ) {
             if !tune.results.isEmpty {
                 Button(t("清除结果", "Clear results")) {
-                    withAnimation(.smooth(duration: 0.25)) { tune.clearResults() }
+                    withAnimation(Motion.state) { tune.clearResults() }
                 }
-                .buttonStyle(.plain)
-                .font(Typo.labelPlain)
-                .foregroundStyle(Palette.inkTertiary)
+                .buttonStyle(TextButtonStyle(.quiet))
             }
 
             Button {
@@ -67,24 +65,29 @@ struct TuneView: View {
             } label: {
                 HStack(spacing: Space.sm) {
                     if tune.isRunning {
-                        ProgressView().controlSize(.small).tint(.white)
+                        ProgressView().controlSize(.small)
                     } else {
-                        Image(systemName: "play.fill")
+                        Image(systemName: "play.fill").glyph(.control)
                     }
                     Text(t("执行选中项", "Run selected"))
                     if tune.selectedCount > 0 {
-                        CountPill(tune.selectedCount)
+                        Badge.count(tune.selectedCount)
                     }
                 }
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(tune.isRunning || tune.selectedCount == 0)
-            .opacity(tune.selectedCount == 0 ? 0.45 : 1)
+            // A repair is not destructive: nothing is removed, a cache is
+            // rebuilt. Neutral, and outlined like every other bar action.
+            .buttonStyle(ActionButtonStyle(.neutral))
+            .actionEnabled(!tune.isRunning && tune.selectedCount > 0)
         }
     }
 }
 
-private struct TaskCard: View {
+/// A repair, its symptom, and the one button that runs it.
+///
+/// Was a 22pt-radius card at two heights; now the app's standard row card, so
+/// a list of repairs and a list of apps read as the same kind of list.
+private struct TaskRow: View {
     let task: TuneTask
     let isSelected: Bool
     let isRunning: Bool
@@ -96,52 +99,53 @@ private struct TaskCard: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: Space.md) {
+        HStack(spacing: Space.md) {
             TriStateBox(state: isSelected ? .on : .off, action: onToggle)
-                .padding(.top, 2)
 
             Image(systemName: task.symbol)
-                .font(.system(size: Typo.Step.subhead))
+                .glyph(.row)
                 .foregroundStyle(isRunning ? Palette.aquaBright : Palette.aqua)
-                .frame(width: 24)
-                .padding(.top, 1)
+                .frame(width: Layout.rowIcon)
                 .breathing(isRunning)
 
-            VStack(alignment: .leading, spacing: Space.xs) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
-                    .font(.system(size: Typo.Step.body, weight: .semibold))
+                    .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
 
                 Text(task.detail)
                     .font(Typo.caption)
                     .foregroundStyle(Palette.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
 
+                // The caveat is the one thing you need before clicking, so it
+                // gets its own line and the row gets the taller of the two
+                // heights — rather than the card growing by an arbitrary
+                // amount and breaking the rhythm of the list.
                 if let warning = task.warning {
                     HStack(spacing: Space.xs) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: Typo.Step.micro))
-                        Text(warning)
-                            .font(.system(size: Typo.Step.overline))
+                        Image(systemName: "info.circle").glyph(.badge)
+                        Text(warning).font(Typo.tag).lineLimit(1)
                     }
                     .foregroundStyle(Palette.caution)
                 }
-
-                if let result {
-                    HStack(spacing: Space.xs) {
-                        Image(systemName: result.succeeded ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(.system(size: Typo.Step.overline))
-                            .symbolEffect(.bounce, value: result.message)
-                        Text(result.message)
-                            .font(.system(size: Typo.Step.overline))
-                            .lineLimit(2)
-                    }
-                    .foregroundStyle(result.succeeded ? Palette.positive : Palette.danger)
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
-                }
             }
 
-            Spacer(minLength: Space.sm)
+            Spacer(minLength: Space.md)
+
+            if let result {
+                HStack(spacing: Space.xs) {
+                    Image(systemName: result.succeeded ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .glyph(.badge)
+                        .symbolEffect(.bounce, value: result.message)
+                    Text(result.message)
+                        .font(Typo.tag)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(result.succeeded ? Palette.positive : Palette.danger)
+                .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
 
             // Permanently visible: a repair you can only reach by discovering
             // that the row reacts to hover is a repair most people never find.
@@ -150,32 +154,24 @@ private struct TaskCard: View {
                     if isRunning {
                         ProgressView().controlSize(.small)
                     } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: Typo.Step.micro))
+                        Image(systemName: "play.fill").glyph(.control)
                     }
                     Text(isRunning ? t("执行中", "Running") : t("执行", "Run"))
                 }
             }
-            .buttonStyle(GhostButtonStyle(tint: isRunning ? Palette.inkTertiary : Palette.aqua))
-            .disabled(isBusy)
-            .opacity(isBusy && !isRunning ? 0.4 : 1)
+            .buttonStyle(ActionButtonStyle(.neutral, height: Control.compact))
+            .actionEnabled(!isBusy)
+            .frame(width: Layout.actionColumn, alignment: .trailing)
             .help(t("只执行这一项，不影响勾选", "Run just this one; the ticks are left alone"))
         }
-        .padding(Space.lg)
-        .glassPanel(radius: Radius.panel)
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.panel, style: .continuous)
-                .strokeBorder(Palette.aqua.opacity(isSelected ? 0.5 : 0), lineWidth: 1.5)
-        }
-        .background {
-            RoundedRectangle(cornerRadius: Radius.panel, style: .continuous)
-                .fill(Palette.aqua.opacity(isSelected ? 0.07 : (isHovering ? 0.035 : 0)))
-        }
+        .padding(.horizontal, Space.md)
+        .frame(height: task.warning == nil ? Layout.standardRow : Layout.tallRow)
+        .glassPanel(radius: Radius.card)
+        .rowSelection(isSelected, hovering: isHovering)
         .onHover { isHovering = $0 }
-        .animation(.smooth(duration: 0.2), value: isSelected)
-        .animation(.smooth(duration: 0.2), value: isHovering)
-        .animation(.smooth(duration: 0.3), value: result?.message)
+        .animation(Motion.reveal, value: result?.message)
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggle)
     }
+
 }

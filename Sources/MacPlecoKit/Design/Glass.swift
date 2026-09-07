@@ -12,9 +12,10 @@ import SwiftUI
 
 /// How much the surface should assert itself.
 public enum GlassLevel {
-    /// Floating panels, cards, sidebars.
+    /// Floating panels, cards, sidebars. May be as transparent as it likes —
+    /// nothing depends on finding its edge.
     case regular
-    /// Interactive controls that should respond to pointer proximity.
+    /// Anything clickable. Carries a legibility floor, below.
     case interactive
 }
 
@@ -27,29 +28,45 @@ private struct GlassSurface<S: InsettableShape>: ViewModifier {
     // `Glass.tint(_:)`: that API saturates the whole pane — the first build's
     // caution banner rendered as a solid amber slab because of it. A 12% fill
     // reads as coloured light in the water instead.
+    //
+    // The interactive level adds the standard's minimum legibility: a fill of
+    // at least 66% white (or its dark-appearance equivalent) and a stroke of
+    // at least 16%, in *both* the macOS 26 and the fallback path. Before this,
+    // only the fallback drew an edge, and on the pale ground the Overview's
+    // secondary button had no visible boundary at all — the material alone is
+    // not a shape.
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .background {
-                    if let tint {
-                        shape.fill(tint.opacity(0.12))
-                    }
-                }
+                .background { wash }
                 .glassEffect(level == .interactive ? Glass.regular.interactive() : .regular, in: shape)
+                .overlay { edge }
         } else {
             content
-                .background {
-                    if let tint {
-                        shape.fill(tint.opacity(0.12))
-                    }
-                }
+                .background { wash }
                 .background(.ultraThinMaterial, in: shape)
-                .overlay {
-                    shape
-                        .strokeBorder(Palette.hairlineStrong, lineWidth: 0.5)
-                }
+                .overlay { edge }
         }
+    }
+
+    @ViewBuilder
+    private var wash: some View {
+        ZStack {
+            if level == .interactive {
+                shape.fill(Palette.controlFill)
+            }
+            if let tint {
+                shape.fill(tint.opacity(0.12))
+            }
+        }
+    }
+
+    private var edge: some View {
+        shape.strokeBorder(
+            level == .interactive ? Palette.controlStroke : Palette.hairlineStrong,
+            lineWidth: level == .interactive ? 1 : 0.5
+        )
     }
 }
 

@@ -4,6 +4,11 @@ import AppKit
 struct CleanView: View {
     @Environment(AppModel.self) private var model
 
+    /// Raised when the selection is about to be erased rather than trashed.
+    /// An irreversible operation gets a surface of its own to be confirmed on,
+    /// which is also the only place its button is allowed to be filled.
+    @State private var confirmingErase = false
+
     private var clean: CleanModel { model.clean }
 
     var body: some View {
@@ -37,9 +42,20 @@ struct CleanView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.smooth(duration: 0.35), value: clean.isCleaning)
+        .animation(Motion.reveal, value: clean.isCleaning)
         .task {
             await clean.scanIfNeeded(registry: model.registry)
+        }
+        .sheet(isPresented: $confirmingErase) {
+            EraseConfirmation(
+                size: clean.selectedSize,
+                count: clean.selectedCount,
+                onCancel: { confirmingErase = false },
+                onConfirm: {
+                    confirmingErase = false
+                    Task { await clean.clean(storage: model.storage, ledger: model.ledger) }
+                }
+            )
         }
     }
 
@@ -51,8 +67,8 @@ struct CleanView: View {
         } label: {
             Label(t("重新扫描", "Rescan"), systemImage: "arrow.clockwise")
         }
-        .buttonStyle(GhostButtonStyle())
-        .disabled(clean.isBusy)
+        .buttonStyle(ActionButtonStyle(.neutral))
+        .actionEnabled(!clean.isBusy)
     }
 
     // MARK: - Summary
@@ -72,9 +88,12 @@ struct CleanView: View {
                                 .monospacedDigit()
                                 .foregroundStyle(Palette.ink)
                                 .contentTransition(.numericText())
+                            // The unit sits on the number's baseline, a step
+                            // down and a shade back: "79.9 GB" is a quantity
+                            // and a ruler, not one word.
                             Text(parts.unit)
                                 .font(Typo.cardTitle)
-                                .foregroundStyle(Palette.inkSecondary)
+                                .foregroundStyle(Palette.inkTertiary)
                         }
                         Text(
                             t(
@@ -99,29 +118,42 @@ struct CleanView: View {
                 reassurance
             }
         }
-        .animation(.smooth(duration: 0.3), value: clean.selectedSize)
+        .animation(Motion.reveal, value: clean.selectedSize)
     }
 
+    /// The page's one hero action — and the one place in the app where a
+    /// single button changes intent with the state of a switch.
+    ///
+    /// With "Skip the Trash" off it is `go`: filled aqua, because everything
+    /// it moves can be put back. Turn the switch on and the same click stops
+    /// being recoverable, so the button stops looking recoverable too: it
+    /// drops to `emphasis`, becomes an outlined destructive proposal, renames
+    /// itself, and routes through a confirmation sheet instead of acting.
+    @ViewBuilder
     private var cleanButton: some View {
-        Button {
-            Task { await clean.clean(storage: model.storage, ledger: model.ledger) }
-        } label: {
-            HStack(spacing: Space.sm) {
-                Image(systemName: clean.permanentDelete ? "trash.slash" : "trash")
-                    .font(.system(size: Typo.Step.body, weight: .semibold))
-                Text(
-                    clean.permanentDelete
-                        ? t("永久删除 \(Bytes.format(clean.selectedSize))", "Erase \(Bytes.format(clean.selectedSize))")
-                        : t("移到废纸篓 \(Bytes.format(clean.selectedSize))", "Move \(Bytes.format(clean.selectedSize)) to Trash")
+        if clean.permanentDelete {
+            Button {
+                confirmingErase = true
+            } label: {
+                Label(
+                    t("永久删除 \(Bytes.format(clean.selectedSize))", "Erase \(Bytes.format(clean.selectedSize))"),
+                    systemImage: "trash.slash"
                 )
             }
+            .buttonStyle(ActionButtonStyle(.destructive, height: Control.emphasis))
+            .actionEnabled(clean.selectedCount > 0 && !clean.isBusy)
+        } else {
+            Button {
+                Task { await clean.clean(storage: model.storage, ledger: model.ledger) }
+            } label: {
+                Label(
+                    t("移到废纸篓 \(Bytes.format(clean.selectedSize))", "Move \(Bytes.format(clean.selectedSize)) to Trash"),
+                    systemImage: "trash"
+                )
+            }
+            .buttonStyle(ActionButtonStyle(.go, height: Control.hero))
+            .actionEnabled(clean.selectedCount > 0 && !clean.isBusy)
         }
-        .buttonStyle(
-            PrimaryButtonStyle(tint: clean.permanentDelete ? Palette.danger : Palette.aqua)
-        )
-        .disabled(clean.selectedCount == 0 || clean.isBusy)
-        .opacity(clean.selectedCount == 0 ? 0.5 : 1)
-
     }
 
     private var quickSelects: some View {
@@ -134,18 +166,16 @@ struct CleanView: View {
 
     private func quickSelect(_ title: String, action: @escaping () -> Void) -> some View {
         Button(title) {
-            withAnimation(.smooth(duration: 0.25)) { action() }
+            withAnimation(Motion.state) { action() }
         }
-        .buttonStyle(.plain)
-        .font(Typo.label)
-        .foregroundStyle(Palette.flow)
+        .buttonStyle(TextButtonStyle())
         .disabled(clean.isBusy)
     }
 
     private var reassurance: some View {
         HStack(spacing: Space.md) {
             Image(systemName: clean.selectionIncludesPermanent ? "exclamationmark.triangle.fill" : "arrow.uturn.backward.circle.fill")
-                .font(.system(size: Typo.Step.body))
+                .glyph(.control)
                 .foregroundStyle(clean.selectionIncludesPermanent ? Palette.caution : Palette.aqua)
 
             Text(
@@ -165,17 +195,14 @@ struct CleanView: View {
 
             Spacer(minLength: Space.sm)
 
-            Toggle(isOn: Binding(
-                get: { clean.permanentDelete },
-                set: { clean.permanentDelete = $0 }
-            )) {
-                Text(t("跳过废纸篓", "Skip the Trash"))
-                    .font(Typo.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-            }
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .tint(Palette.danger)
+            ChoiceToggle(
+                t("跳过废纸篓", "Skip the Trash"),
+                isOn: Binding(
+                    get: { clean.permanentDelete },
+                    set: { clean.permanentDelete = $0 }
+                ),
+                tint: Palette.danger
+            )
             .disabled(clean.isBusy)
         }
     }
@@ -187,14 +214,7 @@ struct CleanView: View {
         if !clean.blockedApps.isEmpty {
             GlassCard(padding: Space.md, radius: Radius.card, tint: Palette.caution) {
                 HStack(spacing: Space.md) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Palette.caution.opacity(0.16))
-                            .frame(width: 30, height: 30)
-                        Image(systemName: "pause.circle.fill")
-                            .font(.system(size: Typo.Step.subhead))
-                            .foregroundStyle(Palette.caution)
-                    }
+                    IconTile("pause.circle.fill", style: .tinted(Palette.caution))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(
                             t(
@@ -202,7 +222,7 @@ struct CleanView: View {
                                 "Quit these apps to reclaim another \(Bytes.format(clean.blockedBytes))"
                             )
                         )
-                        .font(.system(size: Typo.Step.body, weight: .semibold))
+                        .font(Typo.bodyStrong)
                         .foregroundStyle(Palette.ink)
                         Text(clean.blockedApps.prefix(6).map(\.name).joined(separator: " · "))
                             .font(Typo.caption)
@@ -218,7 +238,7 @@ struct CleanView: View {
     // MARK: - Categories
 
     private var categoryList: some View {
-        LazyVStack(spacing: Space.md) {
+        LazyVStack(spacing: Space.sm) {
             ForEach(Array(clean.categories.enumerated()), id: \.element.id) { index, category in
                 CategoryCard(
                     category: category,
@@ -267,30 +287,22 @@ private struct CategoryCard: View {
 
             Button(action: onToggleExpanded) {
                 HStack(spacing: Space.md) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(category.safety.tint.opacity(0.14))
-                            .frame(width: 34, height: 34)
-                        Image(systemName: category.symbol)
-                            .font(.system(size: Typo.Step.subhead))
-                            .foregroundStyle(category.safety.tint)
-                    }
+                    IconTile(category.symbol, style: .tinted(category.safety.tint))
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: Space.sm) {
                             Text(category.title)
                                 .font(Typo.subhead)
                                 .foregroundStyle(Palette.ink)
-                            SafetyChip(category.safety)
+                            Badge(category.safety)
                             if category.safety == .safe, category.flaggedCount > 0 {
-                                Text(
+                                Badge(
                                     t(
                                         "\(category.flaggedCount) 项需留意",
                                         "\(category.flaggedCount) need a look"
-                                    )
+                                    ),
+                                    style: .tinted(Palette.caution)
                                 )
-                                .font(.system(size: Typo.Step.overline))
-                                .foregroundStyle(Palette.caution)
                             }
                         }
                         Text(category.consequence)
@@ -302,11 +314,11 @@ private struct CategoryCard: View {
                     Spacer(minLength: Space.md)
 
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(Bytes.format(category.selectedSize))
-                            .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(category.selectedSize > 0 ? Palette.ink : Palette.inkTertiary)
-                            .contentTransition(.numericText())
+                        Reading(
+                            bytes: category.selectedSize,
+                            emphasis: .heading,
+                            tint: category.selectedSize > 0 ? Palette.ink : Palette.inkTertiary
+                        )
                         Text(
                             t(
                                 "\(category.selectedCount)/\(category.items.count) 项 · 共 \(Bytes.format(category.totalSize))",
@@ -319,15 +331,17 @@ private struct CategoryCard: View {
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: Typo.Step.caption, weight: .semibold))
+                        .glyph(.caption, weight: .semibold)
                         .foregroundStyle(Palette.inkTertiary)
+                        .frame(width: Control.compact)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(Space.lg)
+        .padding(.horizontal, Space.lg)
+        .frame(height: Layout.groupRow)
     }
 
     private var boxState: TriStateBox.Mark {
@@ -379,19 +393,13 @@ private struct ItemRow: View {
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     if item.safety != .safe {
-                        SafetyChip(item.safety, compact: true)
+                        Badge(item.safety, size: .compact)
                     }
                 }
-                if let statusText {
-                    Text(statusText)
-                        .font(Typo.caption)
-                        .foregroundStyle(Palette.inkTertiary)
-                        .lineLimit(1)
-                }
-                Text(verbatim: item.path)
-                    .font(Typo.microMono)
-                    .foregroundStyle(Palette.inkTertiary)
-                    .lineLimit(2)
+                Text(verbatim: statusText ?? item.path)
+                    .font(statusText == nil ? Typo.microMono : Typo.caption)
+                    .foregroundStyle(statusText == nil ? Palette.inkFaint : Palette.caution)
+                    .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
                     .help(item.path)
@@ -399,32 +407,20 @@ private struct ItemRow: View {
 
             Spacer(minLength: Space.sm)
 
-            Button(action: revealInFinder) {
-                Label(t("访达", "Finder"), systemImage: "folder")
-                    .font(Typo.captionStrong)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .tint(Palette.flow)
-            .help(t("在访达中显示", "Show in Finder"))
-            .accessibilityLabel(t("在访达中显示 \(item.title)", "Show \(item.title) in Finder"))
+            IconButton("folder", help: t("在访达中显示 \(item.title)", "Show \(item.title) in Finder"), action: revealInFinder)
 
-            Text(Bytes.format(item.size))
-                .font(.system(size: Typo.Step.label, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Palette.inkSecondary)
-                .frame(minWidth: 68, alignment: .trailing)
+            Reading(bytes: item.size, emphasis: .dense, tint: Palette.inkSecondary)
+                .frame(width: Layout.valueColumn, alignment: .trailing)
         }
-        .padding(.horizontal, Space.lg)
-        .padding(.vertical, Space.sm)
+        .padding(.horizontal, Space.md)
+        .frame(height: Layout.compactRow)
         .background {
-            if isHovering {
-                RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
-                    .fill(Palette.wellFill)
-                    .padding(.horizontal, Space.sm)
-            }
+            RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
+                .fill(Palette.aqua.opacity(isHovering ? 0.06 : 0))
+                .padding(.horizontal, Space.sm)
         }
         .onHover { isHovering = $0 }
+        .animation(Motion.hover, value: isHovering)
         .contextMenu {
             Button(action: revealInFinder) {
                 Label(t("在访达中显示", "Show in Finder"), systemImage: "folder")
@@ -461,7 +457,7 @@ private struct ItemRow: View {
                 .frame(width: 18, height: 18)
         } else {
             Image(systemName: "folder")
-                .font(.system(size: Typo.Step.label))
+                .glyph(.control)
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 18, height: 18)
         }
@@ -478,7 +474,7 @@ private struct ScanningCard: View {
             VStack(alignment: .leading, spacing: Space.lg) {
                 HStack(spacing: Space.md) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: Typo.Step.cardTitle))
+                        .glyph(.card)
                         .foregroundStyle(Palette.aqua)
                         .breathing(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -496,7 +492,7 @@ private struct ScanningCard: View {
                     }
                     Spacer()
                 }
-                CapacityBar(fraction: model.progress?.fraction ?? 0, height: 6)
+                CapacityBar(fraction: model.progress?.fraction ?? 0, weight: .thick)
             }
         }
     }
@@ -539,7 +535,7 @@ private struct CleaningVeil: View {
                 }
 
                 Text(t("正在把选中的内容移入废纸篓…", "Moving the selection to the Trash…"))
-                    .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
+                    .font(Typo.subhead)
                     .foregroundStyle(Palette.ink)
                 Text(t("马上就好，不用盯着。", "Almost there — no need to watch."))
                     .font(Typo.labelPlain)
@@ -594,7 +590,7 @@ private struct FinishedCard: View {
                         if !skipped.isEmpty {
                             HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                                 Image(systemName: "pause.circle")
-                                    .font(.system(size: Typo.Step.caption, weight: .medium))
+                                    .glyph(.caption, weight: .medium)
                                     .foregroundStyle(Palette.caution)
                                     .frame(width: 13, height: 13)
                                     .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
@@ -616,10 +612,10 @@ private struct FinishedCard: View {
                                 URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
                             )
                         }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(ActionButtonStyle(.neutral, height: Control.emphasis))
                     }
                     Button(t("好的", "Done"), action: onDismiss)
-                        .buttonStyle(PrimaryButtonStyle())
+                        .buttonStyle(ActionButtonStyle(.neutral, height: Control.emphasis))
                 }
             }
         }
@@ -646,7 +642,7 @@ private struct FinishedCard: View {
                     )
                     .rotationEffect(.degrees(-90))
                 Image(systemName: "checkmark")
-                    .font(.system(size: Typo.Step.metric, weight: .bold))
+                    .font(Typo.metric)
                     .foregroundStyle(Palette.aqua)
                     .scaleEffect(ringProgress >= 1 ? 1 : 0.4 + 0.6 * ringProgress)
                     .opacity(ringProgress)
@@ -692,5 +688,68 @@ private struct FinishedCard: View {
             "跳过了 \(names)：扫描之后它启动了，\(bytes) 留在原处。退出它再清理一次即可。",
             "Skipped \(namesEN): it started up after the scan, so \(bytes) was left in place. Quit it and clean again."
         )
+    }
+}
+
+// MARK: - Erase confirmation
+
+/// The one screen in the app where an irreversible operation is confirmed, and
+/// therefore the one place a filled danger button exists.
+///
+/// "Skip the Trash" used to turn the page's biggest button into an
+/// unrecoverable delete in place, with no further ceremony: the same click, in
+/// the same spot, with a different outcome. Everything irreversible now costs
+/// a deliberate second step, and the sheet says plainly what will not be
+/// recoverable afterwards.
+private struct EraseConfirmation: View {
+    let size: Int64
+    let count: Int
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            HStack(spacing: Space.md) {
+                IconTile("trash.slash", box: .large, style: .tinted(Palette.danger))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t("永久删除这 \(count) 项？", "Erase these \(count) items?"))
+                        .font(Typo.cardTitle)
+                        .foregroundStyle(Palette.ink)
+                    Text(
+                        t(
+                            "\(Bytes.format(size)) 会被直接删除，不经过废纸篓。",
+                            "\(Bytes.format(size)) will be removed outright, without going through the Trash."
+                        )
+                    )
+                    .font(Typo.labelPlain)
+                    .foregroundStyle(Palette.inkSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Text(
+                t(
+                    "这一步无法撤销，也无法从废纸篓找回。想留一条后路的话，关掉「跳过废纸篓」再清理一次。",
+                    "This cannot be undone and nothing can be put back afterwards. To keep a way out, turn off Skip the Trash and clean again."
+                )
+            )
+            .font(Typo.caption)
+            .foregroundStyle(Palette.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Divider().overlay(Palette.hairline)
+
+            HStack(spacing: Space.md) {
+                Spacer()
+                Button(t("取消", "Cancel"), action: onCancel)
+                    .buttonStyle(ActionButtonStyle(.neutral))
+                Button(t("永久删除", "Erase"), action: onConfirm)
+                    .buttonStyle(ActionButtonStyle(.confirm))
+            }
+        }
+        .padding(Space.xl)
+        .frame(width: 460)
+        .background { Palette.tankGradient.ignoresSafeArea() }
+        .confirmationSurface()
     }
 }

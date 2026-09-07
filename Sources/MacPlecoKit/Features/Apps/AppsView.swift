@@ -20,8 +20,12 @@ struct AppsView: View {
             subtitle: apps.tab == .installed
                 ? t("卸载应用，连同它留在别处的文件", "Uninstall apps, along with what they left elsewhere")
                 : t("管理开机时自动启动的后台程序", "Manage what starts up with your Mac"),
-            trailing: AnyView(tabPicker),
-            note: apps.tab == .startup ? AnyView(startupNote) : nil
+            // The slot holds one control, and never navigation: the tabs moved
+            // down to the content, so this page's page-scoped control is the
+            // shortcut into System Settings that used to hang off the note.
+            trailing: apps.tab == .startup ? AnyView(loginItemsButton) : nil,
+            note: apps.tab == .startup ? AnyView(startupNote) : nil,
+            tabs: AnyView(PageTabs($apps.tab))
         ) {
             switch apps.tab {
             case .installed:
@@ -75,44 +79,37 @@ struct AppsView: View {
         }
     }
 
-    private var tabPicker: some View {
-        @Bindable var apps = model.apps
-        return Picker("", selection: $apps.tab) {
-            ForEach(AppsModel.Tab.allCases) { tab in
-                Text(tab.title).tag(tab)
+    private var loginItemsButton: some View {
+        Button(t("打开登录项设置", "Open Login Items")) {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                _ = NSWorkspace.shared.open(url)
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(width: 220)
+        .buttonStyle(ActionButtonStyle(.neutral))
     }
 
     // MARK: - Installed
 
+    /// Search, sort and scope, all at one height and one type size.
+    ///
+    /// This is the row the standard was written for: it used to be a 31pt
+    /// search field at 12pt beside a 24pt popup at 13pt beside a 24pt mini
+    /// switch at 11pt. `FilterRow` imposes the tier; none of the three
+    /// controls carries a size any more.
     private var installedControls: some View {
         @Bindable var apps = model.apps
-        return HStack(spacing: Space.md) {
+        return FilterRow {
             SearchField(
                 text: $apps.query,
                 prompt: t("搜索应用", "Search apps")
             )
 
-            Picker("", selection: $apps.sort) {
-                ForEach(AppsModel.SortKey.allCases) { key in
-                    Text(key.title).tag(key)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(width: 130)
+            MenuChoice($apps.sort, width: 150)
 
-            Toggle(isOn: $apps.showSystemApps) {
-                Text(t("含系统自带", "Include system apps"))
-                    .font(Typo.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-            }
-            .toggleStyle(.switch)
-            .controlSize(.mini)
+            ChoiceToggle(
+                t("含系统自带", "Include system apps"),
+                isOn: $apps.showSystemApps
+            )
 
             Spacer()
 
@@ -126,7 +123,7 @@ struct AppsView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.smooth(duration: 0.25), value: apps.isSizing)
+        .animation(Motion.state, value: apps.isSizing)
     }
 
     /// Always present, never hidden behind a hover or a prior selection.
@@ -141,19 +138,20 @@ struct AppsView: View {
                 selectedCount: apps.selectedCount,
                 totalCount: list.filter(apps.isSelectable).count,
                 allSelected: apps.allSelected(in: list),
+                // How much a batch will remove is the thing worth knowing
+                // before running one, not after.
+                impact: impactReading,
                 onToggleAll: {
-                    withAnimation(.smooth(duration: 0.25)) {
+                    withAnimation(Motion.state) {
                         apps.toggleSelectAll(in: list)
                     }
                 }
             ) {
                 if apps.selectedCount > 0 {
                     Button(t("清除", "Clear")) {
-                        withAnimation(.smooth(duration: 0.25)) { apps.clearSelection() }
+                        withAnimation(Motion.state) { apps.clearSelection() }
                     }
-                    .buttonStyle(.plain)
-                    .font(Typo.labelPlain)
-                    .foregroundStyle(Palette.inkTertiary)
+                    .buttonStyle(TextButtonStyle(.quiet))
                 }
 
                 Button {
@@ -161,7 +159,7 @@ struct AppsView: View {
                 } label: {
                     HStack(spacing: Space.sm) {
                         if apps.isPlanning, let progress = apps.planningProgress {
-                            ProgressView().controlSize(.small).tint(.white)
+                            ProgressView().controlSize(.small)
                             Text(
                                 t(
                                     "正在核对 \(progress.done)/\(progress.total)",
@@ -169,17 +167,20 @@ struct AppsView: View {
                                 )
                             )
                         } else {
-                            Image(systemName: "trash")
+                            Image(systemName: "trash").glyph(.control)
                             Text(t("卸载所选", "Uninstall selected"))
                             if apps.selectedCount > 0 {
-                                CountPill(apps.selectedCount, tint: Palette.danger)
+                                Badge.count(apps.selectedCount, tint: Palette.danger)
                             }
                         }
                     }
                 }
-                .buttonStyle(PrimaryButtonStyle(tint: Palette.danger))
-                .disabled(apps.selectedCount == 0 || apps.isPlanning)
-                .opacity(apps.selectedCount == 0 ? 0.45 : 1)
+                // Irreversible, and only a proposal: it opens a sheet listing
+                // everything first. Outlined in danger, not a filled pink
+                // block — the filled version was both the loudest thing on
+                // the page and, at 2.6:1, the hardest to read.
+                .buttonStyle(ActionButtonStyle(.destructive))
+                .actionEnabled(apps.selectedCount > 0 && !apps.isPlanning)
                 .help(
                     t(
                         "会先列出每个应用的完整清单，确认后才动手。",
@@ -188,6 +189,12 @@ struct AppsView: View {
                 )
             }
         }
+    }
+
+    /// The weight of the current selection, or nothing when it is empty.
+    private var impactReading: String? {
+        let size = apps.selectedSize(registry: model.registry)
+        return size > 0 ? Bytes.format(size) : nil
     }
 
     private var installedList: some View {
@@ -226,7 +233,9 @@ struct AppsView: View {
 
     /// What used to be a `GlassCard` restating the page. A caveat is not a
     /// card: it belongs with the heading, at caption size, not competing with
-    /// the login items it is describing.
+    /// the login items it is describing. Its button moved to the masthead
+    /// slot, which is where a page-scoped control goes — and which is what
+    /// lets this line stay exactly one line tall on every page.
     private var startupNote: some View {
         PageNote(
             symbol: "bolt.badge.clock",
@@ -234,37 +243,18 @@ struct AppsView: View {
                 "多数是应用的更新器或辅助进程。带锁的属于系统范围，需要在「系统设置 › 通用 › 登录项」里处理。",
                 "Most are updaters or helpers belonging to apps. Locked entries are system-wide — handle those in System Settings › General › Login Items."
             )
-        ) {
-            Button(t("打开登录项设置", "Open Login Items")) {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
-                    _ = NSWorkspace.shared.open(url)
-                }
-            }
-            .buttonStyle(GhostButtonStyle())
-        }
+        )
     }
 
     private var startupControls: some View {
         @Bindable var apps = model.apps
-        return HStack(spacing: Space.md) {
+        return FilterRow {
             SearchField(
                 text: $apps.startupQuery,
                 prompt: t("搜索名称或标识", "Search name or label")
             )
 
-            HStack(spacing: Space.sm) {
-                Text(t("排序", "Sort"))
-                    .font(Typo.caption)
-                    .foregroundStyle(Palette.inkTertiary)
-                Picker("", selection: $apps.startupSort) {
-                    ForEach(AppsModel.StartupSortKey.allCases) { key in
-                        Text(key.title).tag(key)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 240)
-            }
+            SegmentedChoice($apps.startupSort)
 
             Spacer()
 
@@ -338,12 +328,12 @@ private struct AppRow: View {
             if isSelectable {
                 TriStateBox(state: isSelected ? .on : .off, action: onToggleSelection)
             } else {
-                Color.clear.frame(width: 17, height: 17)
+                RowLeadingSpacer()
             }
 
             Image(nsImage: IconCache.shared.icon(forPath: app.path))
                 .resizable()
-                .frame(width: 32, height: 32)
+                .frame(width: Layout.rowIcon, height: Layout.rowIcon)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name)
@@ -364,59 +354,40 @@ private struct AppRow: View {
 
             Spacer(minLength: Space.md)
 
-            Text(app.size > 0 ? Bytes.format(app.size) : "—")
-                .font(.system(size: Typo.Step.label, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .foregroundStyle(Palette.inkSecondary)
-                .frame(minWidth: 74, alignment: .trailing)
+            Group {
+                if app.size > 0 {
+                    Reading(bytes: app.size, tint: Palette.inkSecondary)
+                } else {
+                    Text("—").font(Typo.labelNumeric).foregroundStyle(Palette.inkFaint)
+                }
+            }
+            .frame(width: Layout.valueColumn, alignment: .trailing)
 
             if app.isSystem {
-                Text(t("系统自带", "System"))
-                    .font(.system(size: Typo.Step.overline, weight: .medium))
-                    .foregroundStyle(Palette.inkTertiary)
-                    .padding(.horizontal, Space.sm)
-                    .padding(.vertical, 3)
-                    .background { Capsule().fill(Palette.wellFill) }
-                    .frame(width: 92, alignment: .trailing)
+                Badge(t("系统自带", "System"))
+                    .frame(width: Layout.actionColumn, alignment: .trailing)
             } else {
                 // Permanently visible. Hiding it until hover meant the page
                 // looked like it could not uninstall anything at all.
                 HStack(spacing: Space.xs) {
-                    Button {
+                    IconButton("folder", help: t("在访达中显示", "Show in Finder")) {
                         Removal.revealInFinder(app.url)
-                    } label: {
-                        Image(systemName: "folder")
-                            .font(.system(size: Typo.Step.caption))
-                            .foregroundStyle(Palette.flow)
                     }
-                    .buttonStyle(.plain)
                     .opacity(isHovering ? 1 : 0)
-                    .help(t("在访达中显示", "Show in Finder"))
 
                     Button(t("卸载", "Uninstall"), action: onUninstall)
-                        .buttonStyle(GhostButtonStyle(tint: Palette.danger))
-                        .disabled(isPlanning)
+                        .buttonStyle(ActionButtonStyle(.destructive, height: Control.compact))
+                        .actionEnabled(!isPlanning)
                 }
-                .frame(width: 92, alignment: .trailing)
-                .animation(.smooth(duration: 0.18), value: isHovering)
+                .frame(width: Layout.actionColumn, alignment: .trailing)
+                .animation(Motion.hover, value: isHovering)
             }
         }
-        .padding(Space.md)
+        .padding(.horizontal, Space.md)
+        .frame(height: Layout.standardRow)
         .glassPanel(radius: Radius.card)
-        .overlay {
-            // A selected row says so on its own edge, so a long list still
-            // reads at a glance once it is scrolled away from the checkboxes.
-            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .strokeBorder(Palette.aqua.opacity(isSelected ? 0.55 : 0), lineWidth: 1.5)
-        }
-        .background {
-            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .fill(Palette.aqua.opacity(isSelected ? 0.08 : (isHovering ? 0.04 : 0)))
-        }
+        .rowSelection(isSelected, hovering: isHovering)
         .onHover { isHovering = $0 }
-        .animation(.smooth(duration: 0.2), value: isSelected)
-        .animation(.smooth(duration: 0.2), value: isHovering)
         .contentShape(Rectangle())
         .onTapGesture { if isSelectable { onToggleSelection() } }
         .contextMenu {
@@ -461,17 +432,19 @@ private struct LoginItemRow: View {
 
     var body: some View {
         HStack(spacing: Space.md) {
+            RowLeadingSpacer()
             Image(systemName: item.isUserScope ? "person.crop.circle" : "lock.fill")
-                .font(.system(size: Typo.Step.body))
+                .glyph(.row)
                 .foregroundStyle(item.isUserScope ? Palette.flow : Palette.inkTertiary)
-                .frame(width: 24)
+                .frame(width: Layout.rowIcon)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.displayName)
-                    .font(Typo.label)
+                    .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
                 Text(item.label)
-                    .font(.system(size: Typo.Step.overline))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -480,42 +453,31 @@ private struct LoginItemRow: View {
             Spacer(minLength: Space.md)
 
             if item.runsAtLoad {
-                Text(t("开机即启动", "Runs at login"))
-                    .font(.system(size: Typo.Step.overline, weight: .medium))
-                    .foregroundStyle(Palette.caution)
-                    .padding(.horizontal, Space.sm)
-                    .padding(.vertical, 2.5)
-                    .background { Capsule().fill(Palette.caution.opacity(0.14)) }
+                Badge(t("开机即启动", "Runs at login"), style: .tinted(Palette.caution))
             }
 
-            Button {
+            IconButton("arrow.up.forward.app", help: t("在访达中显示", "Show in Finder")) {
                 Removal.revealInFinder(item.url)
-            } label: {
-                Image(systemName: "arrow.up.forward.app")
-                    .font(.system(size: Typo.Step.caption))
-                    .foregroundStyle(Palette.flow)
             }
-            .buttonStyle(.plain)
             .opacity(isHovering ? 1 : 0)
-            .help(t("在访达中显示", "Show in Finder"))
 
-            if item.isUserScope {
-                Button(t("移除", "Remove"), action: onRemove)
-                    .buttonStyle(GhostButtonStyle(tint: Palette.danger))
-            } else {
-                Text(t("需系统设置", "System-wide"))
-                    .font(.system(size: Typo.Step.overline))
-                    .foregroundStyle(Palette.inkTertiary)
+            Group {
+                if item.isUserScope {
+                    Button(t("移除", "Remove"), action: onRemove)
+                        .buttonStyle(ActionButtonStyle(.destructive, height: Control.compact))
+                } else {
+                    Text(t("需系统设置", "System-wide"))
+                        .font(Typo.caption)
+                        .foregroundStyle(Palette.inkTertiary)
+                }
             }
+            .frame(width: Layout.actionColumn, alignment: .trailing)
         }
-        .padding(Space.md)
+        .padding(.horizontal, Space.md)
+        .frame(height: Layout.standardRow)
         .glassPanel(radius: Radius.card)
-        .background {
-            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .fill(Palette.aqua.opacity(isHovering ? 0.04 : 0))
-        }
+        .rowSelection(false, hovering: isHovering)
         .onHover { isHovering = $0 }
-        .animation(.smooth(duration: 0.2), value: isHovering)
     }
 }
 
@@ -569,13 +531,18 @@ private struct UninstallSheet: View {
         .background {
             Palette.tankGradient.ignoresSafeArea()
         }
+        // The one kind of place a filled danger button is allowed to exist:
+        // the user has already asked for this, and nothing else here competes
+        // with it. Outside a surface marked like this, `.confirm` renders as
+        // an ordinary outlined destructive button.
+        .confirmationSurface()
     }
 
     private var header: some View {
         HStack(spacing: Space.md) {
             Image(nsImage: IconCache.shared.icon(forPath: plan.app.path))
                 .resizable()
-                .frame(width: 44, height: 44)
+                .frame(width: IconBox.large.side, height: IconBox.large.side)
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("卸载 \(plan.app.name)", "Uninstall \(plan.app.name)"))
                     .font(Typo.cardTitle)
@@ -597,7 +564,7 @@ private struct UninstallSheet: View {
         HStack(spacing: Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("共释放 \(Bytes.format(plan.totalSize))", "Frees \(Bytes.format(plan.totalSize))"))
-                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
+                    .font(Typo.bodyNumeric)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(Palette.ink)
@@ -607,8 +574,8 @@ private struct UninstallSheet: View {
             }
             Spacer()
             Button(t("取消", "Cancel"), action: onCancel)
-                .buttonStyle(GhostButtonStyle())
-                .disabled(isWorking)
+                .buttonStyle(ActionButtonStyle(.neutral))
+                .actionEnabled(!isWorking)
             Button(action: onConfirm) {
                 HStack(spacing: Space.sm) {
                     if isWorking {
@@ -617,10 +584,10 @@ private struct UninstallSheet: View {
                     Text(t("卸载", "Uninstall"))
                 }
             }
-            .buttonStyle(PrimaryButtonStyle(tint: Palette.danger))
-            .disabled(isWorking)
+            .buttonStyle(ActionButtonStyle(.confirm))
+            .actionEnabled(!isWorking)
         }
-        .animation(.smooth(duration: 0.3), value: plan.totalSize)
+        .animation(Motion.reveal, value: plan.totalSize)
     }
 }
 
@@ -663,15 +630,12 @@ private struct BatchUninstallSheet: View {
         .background {
             Palette.tankGradient.ignoresSafeArea()
         }
+        .confirmationSurface()
     }
 
     private var header: some View {
         HStack(spacing: Space.md) {
-            Image(systemName: "trash")
-                .font(.system(size: Typo.Step.pageTitle))
-                .foregroundStyle(Palette.danger)
-                .frame(width: 44, height: 44)
-                .background { Circle().fill(Palette.danger.opacity(0.12)) }
+            IconTile("trash", box: .large, style: .tinted(Palette.danger))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("卸载 \(plan.appCount) 个应用", "Uninstall \(plan.appCount) apps"))
@@ -701,7 +665,7 @@ private struct BatchUninstallSheet: View {
 
                 Image(nsImage: IconCache.shared.icon(forPath: entry.app.path))
                     .resizable()
-                    .frame(width: 26, height: 26)
+                    .frame(width: IconBox.small.side, height: IconBox.small.side)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.app.name)
@@ -716,31 +680,26 @@ private struct BatchUninstallSheet: View {
                                 "Bundle \(Bytes.format(entry.bundleSize)) · \(entry.leftovers.count) leftovers \(Bytes.format(entry.leftoverSize))"
                             )
                     )
-                    .font(.system(size: Typo.Step.overline))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
+                    .lineLimit(1)
                 }
 
                 Spacer(minLength: Space.sm)
 
-                Text(Bytes.format(entry.totalSize))
-                    .font(Typo.labelNumeric)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .foregroundStyle(included ? Palette.ink : Palette.inkFaint)
+                Reading(bytes: entry.totalSize, tint: included ? Palette.ink : Palette.inkFaint)
 
                 if !entry.leftovers.isEmpty {
-                    Button {
-                        withAnimation(.smooth(duration: 0.25)) {
+                    IconButton(
+                        "chevron.right",
+                        tint: Palette.inkTertiary,
+                        help: t("查看这些残留", "Show these leftovers")
+                    ) {
+                        withAnimation(Motion.state) {
                             if isOpen { expanded.remove(entry.id) } else { expanded.insert(entry.id) }
                         }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: Typo.Step.overline, weight: .semibold))
-                            .foregroundStyle(Palette.inkTertiary)
-                            .rotationEffect(.degrees(isOpen ? 90 : 0))
                     }
-                    .buttonStyle(.plain)
-                    .help(t("查看这些残留", "Show these leftovers"))
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
             }
 
@@ -752,7 +711,7 @@ private struct BatchUninstallSheet: View {
                         }
                     }
                 }
-                .padding(.leading, Space.xl + Space.sm)
+                .padding(.leading, Space.xxl)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -761,15 +720,15 @@ private struct BatchUninstallSheet: View {
             RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
                 .fill(Palette.wellFill)
         }
-        .opacity(included ? 1 : 0.5)
-        .animation(.smooth(duration: 0.2), value: included)
+        .opacity(included ? 1 : Motion.disabledOpacity)
+        .animation(Motion.state, value: included)
     }
 
     private var footer: some View {
         HStack(spacing: Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("共释放 \(Bytes.format(plan.totalSize))", "Frees \(Bytes.format(plan.totalSize))"))
-                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
+                    .font(Typo.bodyNumeric)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(Palette.ink)
@@ -779,8 +738,8 @@ private struct BatchUninstallSheet: View {
             }
             Spacer()
             Button(t("取消", "Cancel"), action: onCancel)
-                .buttonStyle(GhostButtonStyle())
-                .disabled(isWorking)
+                .buttonStyle(ActionButtonStyle(.neutral))
+                .actionEnabled(!isWorking)
             Button(action: onConfirm) {
                 HStack(spacing: Space.sm) {
                     if isWorking {
@@ -799,11 +758,10 @@ private struct BatchUninstallSheet: View {
                     }
                 }
             }
-            .buttonStyle(PrimaryButtonStyle(tint: Palette.danger))
-            .disabled(isWorking || plan.appCount == 0)
-            .opacity(plan.appCount == 0 ? 0.5 : 1)
+            .buttonStyle(ActionButtonStyle(.confirm))
+            .actionEnabled(!isWorking && plan.appCount > 0)
         }
-        .animation(.smooth(duration: 0.3), value: plan.totalSize)
+        .animation(Motion.reveal, value: plan.totalSize)
     }
 }
 
@@ -819,30 +777,23 @@ private struct LeftoverRow: View {
             TriStateBox(state: leftover.isSelected ? .on : .off, action: onToggle)
             VStack(alignment: .leading, spacing: 1) {
                 Text(leftover.kind)
-                    .font(.system(size: compact ? 11 : 12, weight: .medium))
+                    .font(Typo.label)
                     .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
                 Text(leftover.displayPath)
-                    .font(.system(size: compact ? 9.5 : 10))
+                    .font(Typo.microMono)
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(leftover.url.path)
             }
             Spacer(minLength: Space.sm)
-            Button {
+            IconButton("folder", help: t("在访达中显示", "Show in Finder")) {
                 Removal.revealInFinder(leftover.url)
-            } label: {
-                Image(systemName: "folder")
-                    .font(.system(size: Typo.Step.overline))
-                    .foregroundStyle(Palette.flow)
             }
-            .buttonStyle(.plain)
-            .help(t("在访达中显示", "Show in Finder"))
-            Text(Bytes.format(leftover.size))
-                .font(.system(size: Typo.Step.caption, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Palette.inkSecondary)
+            Reading(bytes: leftover.size, emphasis: .dense, tint: Palette.inkSecondary)
+                .frame(width: Layout.valueColumn, alignment: .trailing)
         }
-        .padding(.vertical, compact ? Space.xs : Space.sm)
+        .frame(height: Layout.compactRow)
     }
 }

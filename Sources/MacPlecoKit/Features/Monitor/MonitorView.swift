@@ -63,7 +63,7 @@ struct MonitorView: View {
     /// room the widest legend can ask for. That is what keeps the row one
     /// height — see `LegendRow`.
     private var gauges: some View {
-        StatCardGrid(minimum: 236) {
+        StatCardGrid {
             StatCard(
                 symbol: "cpu",
                 label: t("处理器", "Processor"),
@@ -101,7 +101,7 @@ struct MonitorView: View {
                 // would do about it.
                 VStack(spacing: Space.xs) {
                     Spacer(minLength: 0)
-                    SegmentedBar(segments: memorySegments, height: 7)
+                    SegmentedBar(segments: memorySegments)
                     Spacer(minLength: 0)
                 }
             } extra: {
@@ -256,17 +256,12 @@ struct MonitorView: View {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     HStack(spacing: Space.sm) {
                         Image(systemName: "macbook")
-                            .font(.system(size: Typo.Step.label))
+                            .glyph(.control)
                             .foregroundStyle(Palette.inkTertiary)
                         Text(SystemInfo.chip.replacingOccurrences(of: "Apple ", with: ""))
-                            .font(.system(size: Typo.Step.subhead, weight: .bold, design: .rounded))
+                            .font(Typo.subhead)
                             .foregroundStyle(Palette.ink)
-                        Text(SystemInfo.thermalDescription)
-                            .font(Typo.overline)
-                            .foregroundStyle(thermalTint)
-                            .padding(.horizontal, Space.sm)
-                            .padding(.vertical, 2.5)
-                            .background { Capsule().fill(thermalTint.opacity(0.14)) }
+                        Badge(SystemInfo.thermalDescription, style: .tinted(thermalTint))
                     }
                     Text(
                         t(
@@ -286,7 +281,7 @@ struct MonitorView: View {
                         .tracking(0.5)
                         .foregroundStyle(Palette.inkTertiary)
                     CoreGrid(loads: monitor.coreLoads)
-                        .frame(width: 260, height: 26)
+                        .frame(width: Layout.coreStrip.width, height: Layout.coreStrip.height)
                 }
             }
         }
@@ -311,7 +306,7 @@ struct MonitorView: View {
                     } icon: {
                         Image(systemName: outcome.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     }
-                    .font(.system(size: Typo.Step.caption))
+                    .font(Typo.caption)
                     .foregroundStyle(outcome.succeeded ? Palette.positive : Palette.caution)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: outcome.message) {
@@ -336,12 +331,12 @@ struct MonitorView: View {
                         }
                     }
                     .animation(
-                        monitor.processOrder == .live ? .smooth(duration: 0.42) : nil,
+                        monitor.processOrder == .live ? Motion.settle : nil,
                         value: monitor.processes.map(\.pid)
                     )
                 }
             }
-            .animation(.smooth(duration: 0.3), value: monitor.lastOutcome?.message)
+            .animation(Motion.reveal, value: monitor.lastOutcome?.message)
         }
     }
 
@@ -357,45 +352,32 @@ struct MonitorView: View {
                             .fill(Palette.aqua)
                             .frame(width: 5, height: 5)
                         Text(t("实时", "Live"))
-                            .font(.system(size: Typo.Step.overline))
+                            .font(Typo.overline)
                             .foregroundStyle(Palette.inkTertiary)
                     }
                 }
 
                 Spacer()
 
-                Picker("", selection: $monitor.processOrder) {
-                    ForEach(ProcessOrderMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 180)
-                .help(
-                    t(
+                SegmentedChoice(
+                    $monitor.processOrder,
+                    help: t(
                         "实时排序会随数据改变行位置；固定位置只刷新数字，进程退出时才补位。",
                         "Live order moves rows with the data; fixed positions refresh values and only fill gaps when a process exits."
                     )
                 )
+                .imposesControlHeight(Control.standard)
             }
 
-            HStack(spacing: Space.md) {
+            FilterRow {
                 SearchField(
                     text: $monitor.query,
                     prompt: t("搜索进程名、路径或 PID", "Search name, path or PID")
                 )
 
-                Picker("", selection: $monitor.scope) {
-                    ForEach(ProcessScope.allCases) { scope in
-                        Text(scope.title).tag(scope)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 190)
-                .help(
-                    t(
+                SegmentedChoice(
+                    $monitor.scope,
+                    help: t(
                         "「系统」是 macOS 自己的后台进程，通常不该结束。",
                         "“System” covers macOS's own background processes, which usually should not be ended."
                     )
@@ -446,11 +428,11 @@ struct MonitorView: View {
             Text("PID")
                 .frame(width: 52, alignment: .trailing)
 
-            sortableHeader(.memory).frame(width: 78, alignment: .trailing)
+            sortableHeader(.memory).frame(width: Layout.valueColumn, alignment: .trailing)
             sortableHeader(.started).frame(width: 92, alignment: .trailing)
             sortableHeader(.cpu).frame(width: 112, alignment: .trailing)
 
-            Color.clear.frame(width: 56, height: 1)
+            Color.clear.frame(width: Control.compact * 2, height: 1)
         }
         .font(Typo.overline)
         .foregroundStyle(Palette.inkTertiary)
@@ -460,7 +442,7 @@ struct MonitorView: View {
     private func sortableHeader(_ metric: ProcessSortMetric) -> some View {
         let isActive = monitor.processSort == metric
         return Button {
-            withAnimation(.smooth(duration: 0.3)) {
+            withAnimation(Motion.reveal) {
                 if isActive {
                     monitor.sortAscending.toggle()
                 } else {
@@ -492,7 +474,7 @@ struct MonitorView: View {
 
     private var sortChevron: some View {
         Image(systemName: monitor.sortAscending ? "chevron.up" : "chevron.down")
-            .font(.system(size: Typo.Step.micro, weight: .bold))
+            .glyph(.badge, weight: .bold)
             .transition(.opacity)
     }
 
@@ -526,16 +508,11 @@ private struct ProcessRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Space.sm) {
                     Text(process.name)
-                        .font(Typo.labelPlain)
+                        .font(Typo.label)
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     if process.isSystem {
-                        Text(t("系统", "System"))
-                            .font(.system(size: Typo.Step.micro, weight: .semibold))
-                            .foregroundStyle(Palette.chartViolet)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background { Capsule().fill(Palette.chartViolet.opacity(0.14)) }
+                        Badge(t("系统", "System"), size: .compact, style: .tinted(Palette.chartViolet))
                     }
                 }
                 if !process.path.isEmpty {
@@ -549,33 +526,29 @@ private struct ProcessRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("\(process.pid)")
-                .font(.system(size: Typo.Step.overline, design: .monospaced))
+                .font(Typo.microMono)
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 52, alignment: .trailing)
 
-            Text(Bytes.formatMemory(process.memory))
-                .font(.system(size: Typo.Step.caption, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(sort == .memory ? Palette.ink : Palette.inkSecondary)
-                .contentTransition(.numericText())
-                .frame(width: 78, alignment: .trailing)
+            Reading(
+                Bytes.formatMemory(process.memory),
+                emphasis: .dense,
+                tint: sort == .memory ? Palette.ink : Palette.inkSecondary
+            )
+            .frame(width: Layout.valueColumn, alignment: .trailing)
 
             Text(startedText)
-                .font(.system(size: Typo.Step.caption, design: .rounded))
+                .font(Typo.captionNumeric)
                 .monospacedDigit()
                 .foregroundStyle(sort == .started ? Palette.ink : Palette.inkSecondary)
                 .frame(width: 92, alignment: .trailing)
                 .help(startedHelp)
 
             HStack(spacing: Space.sm) {
-                CapacityBar(
-                    fraction: min(1, process.cpu / 100),
-                    tint: cpuTint,
-                    height: 4
-                )
-                .frame(width: 52)
+                CapacityBar(fraction: min(1, process.cpu / 100), tint: cpuTint)
+                    .frame(width: 52)
                 Text(String(format: "%.1f%%", process.cpu))
-                    .font(.system(size: Typo.Step.caption, design: .rounded))
+                    .font(Typo.captionNumeric)
                     .monospacedDigit()
                     .foregroundStyle(sort == .cpu ? Palette.ink : Palette.inkSecondary)
                     .contentTransition(.numericText())
@@ -584,37 +557,31 @@ private struct ProcessRow: View {
             .frame(width: 112, alignment: .trailing)
 
             HStack(spacing: Space.xs) {
-                if hovering {
-                    Button(action: onReveal) {
-                        Image(systemName: "folder")
-                            .font(.system(size: Typo.Step.caption))
-                            .foregroundStyle(Palette.flow)
-                    }
-                    .buttonStyle(.plain)
+                IconButton("folder", help: t("在访达中显示", "Show in Finder"), action: onReveal)
                     .disabled(process.revealURL == nil)
-                    .help(t("在访达中显示", "Show in Finder"))
-
-                    Button(action: onEnd) {
-                        Image(systemName: "xmark.octagon")
-                            .font(.system(size: Typo.Step.caption))
-                            .foregroundStyle(Palette.danger)
-                    }
-                    .buttonStyle(.plain)
-                    .help(t("结束进程…", "End process…"))
-                }
+                // Ending a process is irreversible, so it is danger — but it
+                // is an icon button, not a block of colour, and the Alert it
+                // raises is where the decision is actually confirmed.
+                IconButton(
+                    "xmark.octagon",
+                    tint: Palette.danger,
+                    help: t("结束进程…", "End process…"),
+                    action: onEnd
+                )
             }
-            .frame(width: 56, alignment: .trailing)
-            .animation(.smooth(duration: 0.18), value: hovering)
+            .opacity(hovering ? 1 : 0)
+            .frame(width: Control.compact * 2, alignment: .trailing)
+            .animation(Motion.hover, value: hovering)
         }
-        .padding(.vertical, 6)
         .padding(.horizontal, Space.sm)
+        .frame(height: Layout.compactRow)
         .contentShape(Rectangle())
         .background {
             RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
                 .fill(Palette.aqua.opacity(hovering ? 0.06 : 0))
         }
         .onHover { hovering = $0 }
-        .animation(.smooth(duration: 0.2), value: hovering)
+        .animation(Motion.hover, value: hovering)
         .contextMenu {
             Button(action: onReveal) {
                 Label(t("在访达中显示", "Show in Finder"), systemImage: "folder")
@@ -683,7 +650,7 @@ private struct ProcessIcon: View {
                 .frame(width: 18, height: 18)
         } else {
             Image(systemName: process.isSystem ? "gearshape.fill" : "terminal.fill")
-                .font(.system(size: Typo.Step.overline))
+                .glyph(.caption)
                 .foregroundStyle(Palette.inkFaint)
                 .frame(width: 18, height: 18)
         }
@@ -722,14 +689,14 @@ private struct CoreGrid: View {
                     GeometryReader { geo in
                         VStack(spacing: 0) {
                             Spacer(minLength: 0)
-                            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                                 .fill(load > 0.85 ? Palette.caution : Palette.chartTeal)
                                 .frame(height: max(2, geo.size.height * load))
                         }
                     }
                 }
             }
-            .animation(.smooth(duration: 0.5), value: loads)
+            .animation(Motion.settle, value: loads)
             .accessibilityLabel(t("每个核心的负载", "Per-core load"))
         }
     }

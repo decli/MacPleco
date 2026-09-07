@@ -39,17 +39,10 @@ struct MenuBarPanel: View {
 
     private var header: some View {
         HStack(spacing: Space.sm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Palette.aquaSweep)
-                    .frame(width: 22, height: 22)
-                Image(systemName: "fish.fill")
-                    .font(.system(size: Typo.Step.overline, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+            IconTile("fish.fill", box: .small, style: .brand)
             Text("MacPleco")
-                .font(.system(size: Typo.Step.body, weight: .bold, design: .rounded))
-                .foregroundStyle(Palette.ink)
+                .font(Typo.subhead)
+                .foregroundStyle(Palette.inkSecondary)
             Spacer()
             if model.ledger.totalRuns > 0 {
                 Text(
@@ -71,20 +64,17 @@ struct MenuBarPanel: View {
                     .font(Typo.captionStrong)
                     .foregroundStyle(Palette.inkTertiary)
                 Spacer()
-                Text(Bytes.format(model.storage.available))
-                    .font(.system(size: Typo.Step.subhead, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.ink)
+                Reading(bytes: model.storage.available, emphasis: .heading)
             }
             CapacityBar(
                 fraction: model.storage.usedFraction,
                 tint: model.storage.usedFraction > 0.9 ? Palette.caution : Palette.aqua,
-                height: 6
+                weight: .thick
             )
             if model.clean.hasScanned, model.clean.totalSize > 0 {
                 HStack(spacing: Space.xs) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: Typo.Step.micro))
+                        .glyph(.badge)
                     Text(
                         t(
                             "其中 \(Bytes.format(model.clean.totalSize)) 可以清理",
@@ -127,21 +117,18 @@ struct MenuBarPanel: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: Space.xs) {
                 Image(systemName: symbol)
-                    .font(.system(size: Typo.Step.micro))
+                    .glyph(.badge)
                     .foregroundStyle(Palette.aqua)
                 Text(label)
-                    .font(.system(size: Typo.Step.overline))
+                    .font(Typo.overline)
                     .foregroundStyle(Palette.inkTertiary)
             }
-            Text(value)
-                .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Palette.ink)
+            Reading(value, emphasis: .dense)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Space.sm + 2)
+        .padding(Space.md)
         .background {
             RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
                 .fill(Palette.wellFill)
@@ -153,30 +140,22 @@ struct MenuBarPanel: View {
             Button {
                 open(destination: .clean)
             } label: {
-                HStack(spacing: Space.sm) {
-                    Image(systemName: "sparkles")
-                    Text(t("去清理", "Go clean"))
-                    Spacer()
-                }
+                Label(t("去清理", "Go clean"), systemImage: "sparkles")
             }
-            .buttonStyle(PrimaryButtonStyle(wide: true))
+            .buttonStyle(ActionButtonStyle(.go, height: Control.emphasis, wide: true))
 
             HStack {
                 Button(t("打开 MacPleco", "Open MacPleco")) {
                     open(destination: nil)
                 }
-                .buttonStyle(.plain)
-                .font(Typo.caption)
-                .foregroundStyle(Palette.flow)
+                .buttonStyle(TextButtonStyle())
 
                 Spacer()
 
                 Button(t("退出", "Quit")) {
                     NSApplication.shared.terminate(nil)
                 }
-                .buttonStyle(.plain)
-                .font(Typo.caption)
-                .foregroundStyle(Palette.inkTertiary)
+                .buttonStyle(TextButtonStyle(.quiet))
             }
         }
     }

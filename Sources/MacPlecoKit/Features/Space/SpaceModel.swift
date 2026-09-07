@@ -29,7 +29,7 @@ public struct LargeFile: Identifiable, Sendable, Hashable {
 @MainActor
 public final class SpaceModel {
 
-    public enum Tab: String, CaseIterable, Identifiable {
+    public enum Tab: String, CaseIterable, Identifiable, TitledChoice {
         case map
         case large
 

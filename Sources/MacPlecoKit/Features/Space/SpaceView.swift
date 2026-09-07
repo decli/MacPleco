@@ -39,8 +39,9 @@ struct SpaceView: View {
                     "常用文件夹里超过 100 MB 的文件",
                     "Files over 100 MB in your everyday folders"
                 ),
-            trailing: AnyView(pageControls),
-            note: AnyView(modeNote)
+            trailing: space.tab == .large ? AnyView(rescanButton) : nil,
+            note: AnyView(modeNote),
+            tabs: AnyView(PageTabs($space.tab))
         ) {
             switch space.tab {
             case .map:
@@ -68,34 +69,21 @@ struct SpaceView: View {
         }
     }
 
-    /// Both of this page's page-scoped controls, in the one slot every page
-    /// puts them in. "Look again" used to be a ghost button buried inside a
-    /// card in the content, while Clean's identical "Rescan" lived in the
-    /// toolbar — the same action, two different places, on two pages of the
-    /// same app.
-    private var pageControls: some View {
-        @Bindable var space = model.space
-        return HStack(spacing: Space.md) {
-            if space.tab == .large {
-                if space.isScanningLarge {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button {
-                        Task { await space.scanLarge() }
-                    } label: {
-                        Label(t("重新查找", "Look again"), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                }
+    /// The page's one page-scoped control. The tab picker used to share this
+    /// slot with it, which is exactly the mixture the standard forbids: two
+    /// controls of different heights, one of them navigation.
+    private var rescanButton: some View {
+        Button {
+            Task { await space.scanLarge() }
+        } label: {
+            if space.isScanningLarge {
+                Label(t("正在查找", "Looking"), systemImage: "arrow.clockwise")
+            } else {
+                Label(t("重新查找", "Look again"), systemImage: "arrow.clockwise")
             }
-            Picker("", selection: $space.tab) {
-                ForEach(SpaceModel.Tab.allCases) { tab in
-                    Text(tab.title).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
         }
+        .buttonStyle(ActionButtonStyle(.neutral))
+        .actionEnabled(!space.isScanningLarge)
     }
 
     /// How to operate what is below, said once, above it.
@@ -151,14 +139,14 @@ struct SpaceView: View {
             ForEach(Array(space.trail.enumerated()), id: \.element.id) { index, entry in
                 if index > 0 {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: Typo.Step.micro, weight: .semibold))
+                        .glyph(.badge, weight: .semibold)
                         .foregroundStyle(Palette.inkFaint)
                 }
                 Button {
                     Task { await space.goTo(index: index) }
                 } label: {
                     Text(entry.name)
-                        .font(.system(size: Typo.Step.label, weight: index == space.trail.count - 1 ? .semibold : .regular))
+                        .font(Typo.label)
                         .foregroundStyle(index == space.trail.count - 1 ? Palette.ink : Palette.flow)
                 }
                 .buttonStyle(.plain)
@@ -181,29 +169,19 @@ struct SpaceView: View {
                     .foregroundStyle(Palette.inkTertiary)
                 }
             } else {
-                Button {
+                IconButton(
+                    "arrow.clockwise",
+                    tint: Palette.inkTertiary,
+                    help: t("重新测量这一层", "Measure this level again")
+                ) {
                     Task { await space.refresh() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: Typo.Step.caption))
-                        .foregroundStyle(Palette.inkTertiary)
                 }
-                .buttonStyle(.plain)
-                .help(t("重新测量这一层", "Measure this level again"))
 
-                Text(
-                    t(
-                        "当前 \(Bytes.format(space.totalSize))",
-                        "\(Bytes.format(space.totalSize)) here"
-                    )
-                )
-                .font(.system(size: Typo.Step.label, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Palette.inkSecondary)
+                Reading(bytes: space.totalSize, emphasis: .dense, tint: Palette.inkSecondary)
             }
         }
         .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm + 2)
+        .frame(height: Layout.textBar)
         .glassPanel(radius: Radius.row)
     }
 
@@ -255,11 +233,11 @@ struct SpaceView: View {
             if let item = hoveredMapItem {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(item.name)
-                        .font(.system(size: Typo.Step.label, weight: .semibold))
+                        .font(Typo.label)
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     Text("\(Bytes.format(item.size)) · \(mapShare(item.size))")
-                        .font(.system(size: Typo.Step.caption, design: .rounded))
+                        .font(Typo.captionNumeric)
                         .monospacedDigit()
                         .foregroundStyle(Palette.inkSecondary)
                 }
@@ -284,13 +262,13 @@ struct SpaceView: View {
         HStack(spacing: 5) {
             HStack(spacing: 2) {
                 ForEach(Array(colors.enumerated()), id: \.offset) { _, color in
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                         .fill(color)
                         .frame(width: 9, height: 9)
                 }
             }
             Text(label)
-                .font(.system(size: Typo.Step.overline, weight: .medium))
+                .font(Typo.overline)
                 .foregroundStyle(Palette.inkTertiary)
         }
     }
@@ -365,7 +343,7 @@ struct SpaceView: View {
             .animation(.smooth(duration: 0.45), value: space.entries)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 500)
+        .frame(height: Layout.treemap)
         .background {
             RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
                 .fill(Palette.wellFill)
@@ -430,8 +408,8 @@ struct SpaceView: View {
         let rects = Treemap.layout(values: weights, in: CGRect(origin: .zero, size: size))
         return ZStack(alignment: .topLeading) {
             ForEach(Array(rects.enumerated()), id: \.offset) { _, rect in
-                SkeletonBlock(radius: 7)
-                    .padding(1.5)
+                SkeletonBlock()
+                    .padding(2)
                     .frame(width: rect.width, height: rect.height)
                     .offset(x: rect.minX, y: rect.minY)
             }
@@ -455,10 +433,10 @@ struct SpaceView: View {
     private var unreadableState: some View {
         VStack(spacing: Space.md) {
             Image(systemName: "eye.slash")
-                .font(.system(size: Typo.Step.feature, weight: .light))
+                .glyph(.feature)
                 .foregroundStyle(Palette.inkTertiary)
             Text(t("这里读不到内容", "Nothing readable here"))
-                .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
+                .font(Typo.cardTitle)
                 .foregroundStyle(Palette.ink)
             Text(
                 t(
@@ -474,11 +452,11 @@ struct SpaceView: View {
                 Button(t("打开权限设置", "Open permission settings")) {
                     model.permissions.openSettings()
                 }
-                .buttonStyle(GhostButtonStyle(tint: Palette.flow))
+                .buttonStyle(ActionButtonStyle(.neutral, height: Control.emphasis))
                 Button(t("重试", "Try again")) {
                     Task { await space.refresh() }
                 }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(ActionButtonStyle(.neutral, height: Control.emphasis))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -488,10 +466,10 @@ struct SpaceView: View {
         let showLabel = rect.width > 92 && rect.height > 50
         let prominent = rect.width > 250 && rect.height > 125
 
-        return RoundedRectangle(cornerRadius: 7, style: .continuous)
+        return RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
             .fill(tileColor(item: item, rank: rank).gradient)
             .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
                     .strokeBorder(
                         isHovered ? Color.white.opacity(0.75) : Color.black.opacity(0.15),
                         lineWidth: isHovered ? 1.5 : 0.5
@@ -503,14 +481,14 @@ struct SpaceView: View {
                         HStack(spacing: 6) {
                             if prominent {
                                 Image(systemName: item.entry?.isDirectory == false ? "doc.fill" : "folder.fill")
-                                    .font(.system(size: Typo.Step.label, weight: .semibold))
+                                    .glyph(.control, weight: .semibold)
                             }
                             Text(item.name)
                         }
-                            .font(.system(size: prominent ? Typo.Step.cardTitle : Typo.Step.body, weight: .semibold, design: .rounded))
+                            .font(prominent ? Typo.cardTitle : Typo.bodyStrong)
                             .lineLimit(2)
                         Text("\(Bytes.format(item.size)) · \(mapShare(item.size))")
-                            .font(.system(size: prominent ? Typo.Step.body : Typo.Step.caption, weight: .medium, design: .rounded))
+                            .font(prominent ? Typo.bodyNumeric : Typo.captionNumeric)
                             .monospacedDigit()
                             .opacity(0.85)
                     }
@@ -519,7 +497,7 @@ struct SpaceView: View {
                     .padding(prominent ? Space.lg : Space.sm)
                 }
             }
-            .padding(2.5)
+            .padding(2)
             .frame(width: rect.width, height: rect.height)
             .offset(x: rect.minX, y: rect.minY)
             .scaleEffect(isHovered ? 1.012 : 1, anchor: .center)
@@ -587,12 +565,15 @@ struct SpaceView: View {
             }
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 285), spacing: Space.md)],
-                spacing: Space.md
+                columns: [GridItem(.adaptive(minimum: 320), spacing: Space.md)],
+                spacing: Space.sm
             ) {
                 if space.entries.isEmpty && space.isScanning {
                     ForEach(0..<6, id: \.self) { _ in
-                        SkeletonBlock(radius: Radius.card).frame(height: 76)
+                        // The placeholder is the row's own height. It used to
+                        // be 76 against a 65pt card, so the page jumped the
+                        // moment real data arrived.
+                        SkeletonBlock(radius: Radius.card).frame(height: Layout.standardRow)
                     }
                 } else {
                     ForEach(Array(space.entries.prefix(12).enumerated()), id: \.element.id) { index, entry in
@@ -604,64 +585,51 @@ struct SpaceView: View {
     }
 
     private func rankedEntry(_ entry: SpaceEntry, rank: Int) -> some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            HStack(spacing: Space.sm) {
-                Text("\(rank)")
-                    .font(.system(size: Typo.Step.overline, weight: .bold, design: .rounded))
-                    .foregroundStyle(Palette.inkTertiary)
-                    .frame(width: 20, height: 20)
-                    .background { Circle().fill(Palette.wellFill) }
+        HStack(spacing: Space.md) {
+            // The rank sits in the column a checkbox would occupy, so these
+            // cards share their title edge with every other list in the app.
+            Text("\(rank)")
+                .font(Typo.tag)
+                .monospacedDigit()
+                .foregroundStyle(Palette.inkTertiary)
+                .frame(width: 16, height: 16)
+                .background { Circle().fill(Palette.wellFill) }
 
-                Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
-                    .font(.system(size: Typo.Step.label))
-                    .foregroundStyle(entry.isDirectory ? Palette.aqua : Palette.caution)
+            Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
+                .glyph(.row)
+                .foregroundStyle(entry.isDirectory ? Palette.aqua : Palette.caution)
+                .frame(width: Layout.rowIcon)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.name)
-                        .font(.system(size: Typo.Step.body, weight: .semibold))
-                        .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text(verbatim: entry.url.path)
-                        .font(Typo.microMono)
-                        .foregroundStyle(Palette.inkTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(entry.url.path)
-                }
-
-                Spacer(minLength: Space.xs)
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(Bytes.format(entry.size))
-                        .font(Typo.labelNumeric)
-                        .monospacedDigit()
-                        .foregroundStyle(Palette.ink)
-                    Text(mapShare(entry.size))
-                        .font(.system(size: Typo.Step.overline, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Palette.inkTertiary)
-                }
-
-                Button {
-                    Removal.revealInFinder(entry.url)
-                } label: {
-                    Image(systemName: "folder")
-                        .font(.system(size: Typo.Step.caption, weight: .medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .tint(Palette.flow)
-                .help(t("在访达中显示", "Show in Finder"))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(Typo.bodyStrong)
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                CapacityBar(
+                    fraction: space.totalSize > 0 ? Double(entry.size) / Double(space.totalSize) : 0,
+                    tint: entry.isDirectory ? Palette.aqua : Palette.caution
+                )
+                .frame(maxWidth: 120)
             }
 
-            CapacityBar(
-                fraction: space.totalSize > 0 ? Double(entry.size) / Double(space.totalSize) : 0,
-                tint: entry.isDirectory ? Palette.aqua : Palette.caution,
-                height: 3
-            )
+            Spacer(minLength: Space.sm)
+
+            VStack(alignment: .trailing, spacing: 1) {
+                Reading(bytes: entry.size)
+                Text(mapShare(entry.size))
+                    .font(Typo.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.inkTertiary)
+            }
+            .frame(width: Layout.valueColumn, alignment: .trailing)
+
+            IconButton("folder", help: t("在访达中显示", "Show in Finder")) {
+                Removal.revealInFinder(entry.url)
+            }
         }
-        .padding(Space.md)
+        .padding(.horizontal, Space.md)
+        .frame(height: Layout.standardRow)
         .glassPanel(radius: Radius.card)
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .onTapGesture {
@@ -688,10 +656,10 @@ struct SpaceView: View {
         // Lazy on purpose: up to 120 rows land in one update when the scan
         // finishes, and building them all at once (each with a glass pane
         // and an icon) stalled the main thread visibly.
-        LazyVStack(alignment: .leading, spacing: Space.md) {
+        LazyVStack(alignment: .leading, spacing: Space.sm) {
             if space.isScanningLarge && space.largeFiles.isEmpty {
                 ForEach(0..<6, id: \.self) { _ in
-                    SkeletonBlock(radius: Radius.card).frame(height: 56)
+                    SkeletonBlock(radius: Radius.card).frame(height: Layout.tallRow)
                 }
             } else if space.largeFiles.isEmpty {
                 RestfulState(
@@ -729,17 +697,18 @@ private struct LargeFileRow: View {
 
     var body: some View {
         HStack(spacing: Space.md) {
+            RowLeadingSpacer()
             Group {
                 if let icon {
                     Image(nsImage: icon)
                         .resizable()
                 } else {
                     Image(systemName: "doc.fill")
-                        .font(.system(size: Typo.Step.subhead))
+                        .glyph(.row)
                         .foregroundStyle(Palette.inkFaint)
                 }
             }
-            .frame(width: 30, height: 30)
+            .frame(width: Layout.rowIcon, height: Layout.rowIcon)
             .task(id: file.id) {
                 let path = file.url.path
                 icon = await Task.detached(priority: .utility) {
@@ -750,62 +719,53 @@ private struct LargeFileRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(file.name)
-                    .font(Typo.bodyStrong)
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                Text(verbatim: file.url.path)
-                    .font(Typo.microMono)
-                    .foregroundStyle(Palette.inkTertiary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-                    .help(file.url.path)
-
                 HStack(spacing: Space.sm) {
-                    Text(file.folder)
-                        .font(Typo.caption)
-                        .foregroundStyle(Palette.inkTertiary)
-                        .padding(.horizontal, Space.sm)
-                        .padding(.vertical, 2)
-                        .background { Capsule().fill(Palette.wellFill) }
+                    Text(file.name)
+                        .font(Typo.bodyStrong)
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Badge(file.folder)
                     Text(RelativeTime.describe(file.modified))
                         .font(Typo.caption)
                         .foregroundStyle(isStale ? Palette.caution : Palette.inkTertiary)
                 }
+
+                Text(verbatim: file.url.path)
+                    .font(Typo.microMono)
+                    .foregroundStyle(Palette.inkFaint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .help(file.url.path)
             }
 
             Spacer(minLength: Space.md)
 
-            Text(Bytes.format(file.size))
-                .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Palette.ink)
-                .frame(minWidth: 76, alignment: .trailing)
+            Reading(bytes: file.size)
+                .frame(width: Layout.valueColumn, alignment: .trailing)
 
-            Button {
-                Removal.revealInFinder(file.url)
-            } label: {
-                Label(t("访达", "Finder"), systemImage: "folder")
-                    .font(Typo.captionStrong)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .tint(Palette.flow)
-            .help(t("在访达中显示", "Show in Finder"))
-            .accessibilityLabel(t("在访达中显示 \(file.name)", "Show \(file.name) in Finder"))
-
-            if hovering {
+            HStack(spacing: Space.xs) {
+                IconButton("folder", help: t("在访达中显示 \(file.name)", "Show \(file.name) in Finder")) {
+                    Removal.revealInFinder(file.url)
+                }
                 if canTrash {
-                    Button(t("移到废纸篓", "Trash"), action: onTrash)
-                        .buttonStyle(GhostButtonStyle(tint: Palette.danger))
+                    // Always visible, and neutral rather than red. It moves a
+                    // file to the Trash, which is recoverable — painting that
+                    // red is how the app ran out of vocabulary for the things
+                    // that genuinely cannot be undone. Hiding it behind hover
+                    // was the other half: the page's main verb was invisible
+                    // until you happened to sweep across a row.
+                    Button(t("移到废纸篓", "Move to Trash"), action: onTrash)
+                        .buttonStyle(ActionButtonStyle(.reversible, height: Control.compact))
                 }
             }
+            .frame(width: Layout.actionColumn + Control.compact, alignment: .trailing)
         }
-        .padding(Space.md)
+        .padding(.horizontal, Space.md)
+        .frame(height: Layout.standardRow)
         .glassPanel(radius: Radius.card)
+        .rowSelection(false, hovering: hovering)
         .onHover { hovering = $0 }
         .contextMenu {
             Button {

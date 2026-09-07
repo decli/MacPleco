@@ -20,7 +20,8 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 240)
+                .controlSize(Control.size(for: Control.standard))
+                .frame(width: 240, height: Control.standard)
             }
 
             VStack(alignment: .leading, spacing: Space.sm) {
@@ -32,7 +33,8 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 300)
+                .controlSize(Control.size(for: Control.standard))
+                .frame(width: 300, height: Control.standard)
                 Text(
                     t(
                         "液态玻璃在深色的水里最好看。",
@@ -45,13 +47,10 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: Space.sm) {
                 SectionLabel(t("菜单栏", "Menu bar"))
-                Toggle(isOn: $menuBarEnabled) {
-                    Text(t("在菜单栏显示小鱼", "Show the fish in the menu bar"))
-                        .font(Typo.labelPlain)
-                        .foregroundStyle(Palette.ink)
-                }
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                ChoiceToggle(
+                    t("在菜单栏显示小鱼", "Show the fish in the menu bar"),
+                    isOn: $menuBarEnabled
+                )
                 Text(
                     t(
                         "随时看到剩余空间，一步进入清理。",
@@ -66,24 +65,26 @@ struct SettingsView: View {
 
             HStack(spacing: Space.md) {
                 Image(systemName: model.permissions.hasFullDiskAccess ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .glyph(.row)
                     .foregroundStyle(model.permissions.hasFullDiskAccess ? Palette.positive : Palette.caution)
                 Text(
                     model.permissions.hasFullDiskAccess
                         ? t("已获得完全磁盘访问权限", "Full Disk Access granted")
                         : t("尚未获得完全磁盘访问权限", "Full Disk Access not granted")
                 )
-                .font(Typo.labelPlain)
+                .font(Typo.body)
                 .foregroundStyle(Palette.ink)
                 Spacer()
                 Button(t("打开设置", "Open Settings")) {
                     model.permissions.openSettings()
                 }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(ActionButtonStyle(.neutral, height: Control.emphasis))
             }
 
             if model.ledger.totalRuns > 0 {
                 HStack(spacing: Space.md) {
                     Image(systemName: "fish.fill")
+                        .glyph(.row)
                         .foregroundStyle(Palette.aqua)
                     Text(
                         t(
@@ -91,15 +92,13 @@ struct SettingsView: View {
                             "\(Bytes.format(model.ledger.totalBytes)) freed across \(model.ledger.totalRuns) cleans"
                         )
                     )
-                    .font(Typo.labelPlain)
+                    .font(Typo.body)
                     .foregroundStyle(Palette.ink)
                     Spacer()
                     Button(t("清零统计", "Reset stats")) {
                         model.ledger.reset()
                     }
-                    .buttonStyle(.plain)
-                    .font(Typo.caption)
-                    .foregroundStyle(Palette.inkTertiary)
+                    .buttonStyle(TextButtonStyle(.quiet))
                 }
             }
 
@@ -135,17 +134,10 @@ struct SettingsView: View {
     private var about: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack(spacing: Space.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Palette.aquaSweep)
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "fish.fill")
-                        .font(.system(size: Typo.Step.subhead, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
+                IconTile("fish.fill", box: .medium, style: .brand)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MacPleco \(appVersion)")
-                        .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
+                        .font(Typo.subhead)
                         .foregroundStyle(Palette.ink)
                     Text(t("GPL-3.0 开源许可", "Licensed under GPL-3.0"))
                         .font(Typo.caption)

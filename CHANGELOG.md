@@ -7,6 +7,75 @@ page.
 这里记录 MacPleco 的主要变化。安装制品与完整双语说明请见
 [Releases](https://github.com/decli/MacPleco/releases) 页面。
 
+## [Unreleased]
+
+### Changed · 改进
+
+- The interface is rebuilt on the v2.0 UI standard (`docs/ui-standard.md`).
+  Four control heights instead of a dozen — 24 for row actions, **28 as the
+  default**, 36 for a card's own action, 44 for the one thing a page wants you
+  to do. 28 rather than 24 because a Han glyph fills its em box: 13pt Chinese
+  in a 24pt capsule leaves 5.5pt of air and reads as if it is touching the
+  edges, where the same capsule looks roomy around Latin text.
+- The sidebar and the page share one masthead band, and everything in it sits
+  on **one baseline** 33pt below the title bar. Aligning frame centres is not
+  enough across two type sizes in Chinese; aligning baselines is. Measured, the
+  wordmark and the page title now both land at y=85 on all six pages.
+- Tabs came out of the masthead slot and sank to the content, above the list
+  they switch. The slot holds exactly one page-scoped control, so it is 28pt
+  tall on every page and the note under it no longer moves.
+- Containers impose size; controls no longer accept it. `SearchField` was the
+  app's single search control and still stood 7pt taller than the popup beside
+  it, because nothing said the two were neighbours. `FilterRow` now sets the
+  height, the type size and the system control size for everything on the row.
+- **A destructive action is never the loudest thing on the screen** — the
+  README's first promise, which the code had been breaking. A call site now
+  declares an `ActionIntent` and cannot choose a colour: `go` is the only
+  filled intent, `destructive` is always outlined, and a filled danger button
+  exists only inside a sheet marked `confirmationSurface()`. "Uninstall
+  selected" is an outlined proposal; "Skip the Trash" turns the clean button
+  into an outlined `永久删除` that routes through a confirmation instead of
+  acting.
+- Fixed the contrast of the app's loudest button. White on `aquaSweep`
+  measured 2.62:1 in light appearance and 1.40:1 in dark — worse than the pink
+  Uninstall button. Filled controls now use a `goFill` that goes deep in light
+  and stays bright in dark, paired with an `onAccent` foreground that flips
+  with it: 4.64:1 and 5.68:1. The sweep stays where it belongs, on the depth
+  ring and the capacity bars, which carry no text.
+- Clickable glass carries a legibility floor — an opaque-enough fill and a
+  stroke of at least 16%, in both the macOS 26 and the fallback path. The
+  Overview's secondary button previously had no visible edge on the pale
+  ground.
+- One badge replaces nine, one row geometry replaces eight, six motion
+  durations replace thirteen, and readings set the unit apart from the
+  quantity. `scripts/check-ui-standard.sh` runs first in CI so none of it
+  drifts back.
+
+- 界面按 v2.0 界面标准（`docs/ui-standard.md`）重建。控件高度收成四档——行内 24、
+  **默认 28**、卡内主动作 36、每页唯一的号召动作 44。默认档是 28 而不是 24：中文字身
+  满格，13pt 中文在 24 高胶囊里上下只剩 5.5pt，看着顶边，而同样的胶囊配拉丁文字反而
+  宽松。
+- 侧栏与页面共享同一条报头带，带内所有文字落在标题栏下方 33pt 的**同一条基线**上。
+  中英混排下把两个不同字号的文字框居中对齐是不够的，对齐基线才够。实测六个页面的
+  字标与页面标题都在 y=85。
+- 页签从报头插槽下沉到内容区，长在它所切换的列表上方。插槽只放一个页面级控件，因此
+  每页恒为 28 高，下面的说明行不再忽高忽低。
+- 尺寸由容器施加，控件不再接受尺寸参数。`SearchField` 一直是全 App 唯一的搜索实现，
+  却仍比邻座的下拉高 7pt——因为没有东西规定它跟谁并排。`FilterRow` 现在为整行统一
+  高度、字号与系统控件尺寸。
+- **破坏性动作不再是屏幕上最显眼的那个**——README 第一段的承诺，此前一直没兑现。
+  调用方现在声明 `ActionIntent`，选不了颜色：只有 `go` 能实心，`destructive` 一律
+  描边，实心 danger 只存在于标了 `confirmationSurface()` 的确认界面里。「卸载所选」
+  变成描边提议；打开「跳过废纸篓」后，清理按钮改文案、改形态，并改为先弹确认。
+- 修复了全 App 最响那颗按钮的对比度。白字压 `aquaSweep` 实测浅色 2.62:1、深色
+  1.40:1——比那颗被拿来当反面教材的粉红按钮还差。实心控件改用 `goFill`（浅色走深、
+  深色保持亮），配一个跟着外观翻转的 `onAccent` 前景色：4.64:1 与 5.68:1。渐变回到
+  它该待的地方——不承载文字的水位环与容量条。
+- 可点的玻璃有了可辨度下限：足够不透明的填充加至少 16% 的描边，macOS 26 与回退分支
+  都画。此前「看看有哪些」在浅色地上根本看不出边界。
+- 一个徽章取代九种写法，一套行几何取代八种行高，六档动效取代十三种时长，数值与单位
+  分开排。`scripts/check-ui-standard.sh` 在 CI 第一步拦截回流。
+
 ## [0.3.6] - 2026-09-07
 
 ### Changed · 改进

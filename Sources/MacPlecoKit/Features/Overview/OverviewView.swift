@@ -27,8 +27,14 @@ struct OverviewView: View {
 
     // MARK: - Hero
 
+    /// The page's one loud moment, and the only filled block in the window.
+    ///
+    /// Both buttons are `hero`: they are a pair of answers to the same
+    /// question, and a pair rendered at two sizes reads as one button plus an
+    /// afterthought. The secondary one carries a real edge now — on the pale
+    /// ground its outline used to disappear into the card behind it.
     private var hero: some View {
-        GlassCard(padding: Space.xl + Space.xs) {
+        GlassCard(padding: Space.xl) {
             HStack(alignment: .center, spacing: Space.huge) {
                 DepthRing(
                     usedFraction: storage.usedFraction,
@@ -57,25 +63,24 @@ struct OverviewView: View {
                     HStack(spacing: Space.md) {
                         Button {
                             clean.selectRecommended()
-                            withAnimation(.snappy(duration: 0.32)) {
+                            withAnimation(Motion.reveal) {
                                 model.destination = .clean
                             }
                         } label: {
-                            HStack(spacing: Space.sm) {
-                                Image(systemName: "sparkles")
-                                Text(t("开始清理", "Start cleaning"))
-                            }
+                            Label(t("开始清理", "Start cleaning"), systemImage: "sparkles")
                         }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(clean.isScanning || clean.totalSize == 0)
-                        .opacity(clean.isScanning || clean.totalSize == 0 ? 0.5 : 1)
+                        // Reversible and affirmative: everything it touches
+                        // goes to the Trash first. The one intent allowed to
+                        // be the loudest thing on the page.
+                        .buttonStyle(ActionButtonStyle(.go, height: Control.hero))
+                        .actionEnabled(!clean.isScanning && clean.totalSize > 0)
 
                         Button(t("看看有哪些", "See what's there")) {
-                            withAnimation(.snappy(duration: 0.32)) {
+                            withAnimation(Motion.reveal) {
                                 model.destination = .clean
                             }
                         }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(ActionButtonStyle(.neutral, height: Control.hero))
                     }
 
                     Label {
@@ -89,7 +94,7 @@ struct OverviewView: View {
                         Image(systemName: "arrow.uturn.backward.circle.fill")
                             .foregroundStyle(Palette.aqua)
                     }
-                    .font(.system(size: Typo.Step.caption))
+                    .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                 }
 
@@ -140,7 +145,7 @@ struct OverviewView: View {
     // MARK: - Insight cards
 
     private var insights: some View {
-        StatCardGrid(minimum: 224) {
+        StatCardGrid {
             StatCard(
                 symbol: "internaldrive",
                 label: t("磁盘", "Disk"),
@@ -205,8 +210,8 @@ struct OverviewView: View {
         return GlassCard(padding: Space.lg, radius: Radius.card, tint: Palette.aqua) {
             HStack(spacing: Space.md) {
                 Image(systemName: "fish.fill")
-                    .font(.system(size: Typo.Step.subhead))
-                    .foregroundStyle(Palette.aquaSweep)
+                    .glyph(.row)
+                    .foregroundStyle(Palette.aqua)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(
                         t(
@@ -214,7 +219,7 @@ struct OverviewView: View {
                             "MacPleco has freed \(Bytes.format(ledger.totalBytes)) on this Mac so far"
                         )
                     )
-                    .font(.system(size: Typo.Step.body, weight: .semibold))
+                    .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.ink)
                     if let last = ledger.lastRecord {
                         Text(
@@ -242,7 +247,7 @@ struct PermissionCard: View {
         GlassCard(padding: Space.lg, tint: Palette.flow) {
             HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: "lock.open")
-                    .font(.system(size: Typo.Step.pageTitle))
+                    .glyph(.title)
                     .foregroundStyle(Palette.flow)
 
                 VStack(alignment: .leading, spacing: Space.xs) {
@@ -263,17 +268,18 @@ struct PermissionCard: View {
                 Spacer(minLength: Space.sm)
 
                 VStack(spacing: Space.sm) {
+                    // Outlined, not filled: the hero card below already owns
+                    // this page's one filled block, and two of them competing
+                    // is exactly the noise the standard is trying to remove.
                     Button(t("去设置", "Open Settings")) {
                         permissions.openSettings()
                     }
-                    .buttonStyle(PrimaryButtonStyle(tint: Palette.flow))
+                    .buttonStyle(ActionButtonStyle(.neutral, height: Control.emphasis))
 
                     Button(t("我已授权", "I've done it")) {
                         permissions.refresh()
                     }
-                    .buttonStyle(.plain)
-                    .font(Typo.caption)
-                    .foregroundStyle(Palette.flow)
+                    .buttonStyle(TextButtonStyle())
                 }
             }
         }

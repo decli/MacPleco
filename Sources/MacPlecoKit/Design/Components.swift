@@ -18,17 +18,16 @@ public struct HoverLift: ViewModifier {
             )
             .onHover { inside in
                 guard enabled else { return }
-                withAnimation(.smooth(duration: 0.25)) { hovering = inside }
+                withAnimation(Motion.hover) { hovering = inside }
             }
     }
 }
 
 /// How many stagger steps the surrounding scaffold has already used.
 ///
-/// `Page` draws its header at step 0 and then sets this to 1, so a page's own
-/// blocks keep passing 0, 1, 2… as they always did and still land *after* the
-/// header rather than alongside it. Without it, adding the header would have
-/// meant renumbering every `.rises()` call in the app.
+/// `Page` draws its masthead group at step 0 and then sets this to 1, so a
+/// page's own blocks keep passing 0, 1, 2… as they always did and still land
+/// *after* the header rather than alongside it.
 private struct StaggerBaseKey: EnvironmentKey {
     static let defaultValue = 0
 }
@@ -40,8 +39,7 @@ extension EnvironmentValues {
     }
 }
 
-/// Fade-and-rise entrance, staggered by index. Sections pass 0, 1, 2… to
-/// their top-level blocks so a page assembles instead of popping.
+/// Fade-and-rise entrance, staggered by index.
 public struct StaggerIn: ViewModifier {
     let index: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -54,7 +52,7 @@ public struct StaggerIn: ViewModifier {
             .offset(y: shown || reduceMotion ? 0 : 16)
             .onAppear {
                 guard !shown else { return }
-                withAnimation(.smooth(duration: 0.55).delay(Double(base + index) * 0.06)) {
+                withAnimation(Motion.enter.delay(Double(base + index) * Motion.enterStagger)) {
                     shown = true
                 }
             }
@@ -73,7 +71,9 @@ extension View {
 
 // MARK: - Skeleton
 
-/// A shimmering placeholder block for content that is still being measured.
+/// A shimmering placeholder. Its height must match the real row it stands in
+/// for — Space's placeholders were 76pt against 65pt cards, so the page
+/// visibly shrank the moment the data arrived.
 public struct SkeletonBlock: View {
     var radius: CGFloat = Radius.chip
     @State private var pulse = false
@@ -125,179 +125,55 @@ public struct GlassCard<Content: View>: View {
     }
 }
 
-// MARK: - Page header
+// MARK: - Page note
 
-/// The one heading every page opens with.
+/// One line of page-scoped guidance under the masthead: what this page will
+/// and will not touch, or how to operate the thing below it.
 ///
-/// This used to be the system's `navigationTitle`/`navigationSubtitle`, drawn
-/// by AppKit in the title bar. Two things were wrong with that. AppKit picks
-/// the sizes — roughly 14pt for the title and 10.5pt for the subtitle — so the
-/// page's own name rendered *smaller than half the labels in the content below
-/// it*, and no amount of styling could reach it. And it sat outside the
-/// content column, which meant a page's controls had to be flung to the far
-/// right of the **window** rather than lining up with the **content** they act
-/// on, drifting further away the wider the window got.
-///
-/// So the header comes back into the content, on the content's own left edge,
-/// at sizes this app controls: 20pt for the name, 13pt for the sentence that
-/// says what the page does. The trailing slot is the page's single page-scoped
-/// control — a mode switch, or a rescan — and it is the *only* place one goes.
-/// Filters and searches, which act on a list rather than on the page, stay
-/// with their list.
-///
-/// The title is deliberately smaller than a stat card's 24pt value. The
-/// sidebar already says which page this is; the header only confirms it. The
-/// number the user came for should be the loudest thing on the screen.
-public struct PageHeader<Trailing: View>: View {
-    private let title: String
-    private let subtitle: String
-    private let trailing: Trailing
-
-    public init(
-        title: String,
-        subtitle: String,
-        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
-    ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.trailing = trailing()
-    }
-
-    public var body: some View {
-        HStack(alignment: .center, spacing: Space.lg) {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text(title)
-                    .font(Typo.pageTitle)
-                    .foregroundStyle(Palette.ink)
-                Text(subtitle)
-                    .font(Typo.body)
-                    .foregroundStyle(Palette.inkSecondary)
-                    // A longer translation wraps rather than pushing the
-                    // control off the trailing edge.
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: Space.md)
-            trailing
-        }
-    }
-}
-
-/// One line of page-scoped guidance directly under the header: what this page
-/// will and will not touch, or how to operate the thing below it.
-///
-/// It replaces three separate `GlassCard`s that each explained their own page
-/// in their own size (11pt on Tune, 11pt on Apps' startup tab, 13.5pt in the
-/// Overview hero) and repeated what the subtitle had already said one line
-/// above. A caveat is not a card: it should not compete with the content for
-/// the same visual weight.
-public struct PageNote<Trailing: View>: View {
+/// Fixed at one line's height. It used to grow to 32pt whenever it carried a
+/// button, which moved every block on the page down by 16 relative to the
+/// same page without one.
+public struct PageNote: View {
     private let symbol: String
     private let text: String
     private let tint: Color
-    private let trailing: Trailing
 
-    public init(
-        symbol: String = "info.circle",
-        _ text: String,
-        tint: Color = Palette.inkTertiary,
-        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
-    ) {
+    public init(symbol: String = "info.circle", _ text: String, tint: Color = Palette.inkTertiary) {
         self.symbol = symbol
         self.text = text
         self.tint = tint
-        self.trailing = trailing()
     }
 
     public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
             // A fixed box, because SF Symbols of one point size do not share
-            // one width or one baseline. Measured across the four notes, the
-            // free-sized glyph left the text starting at x=304.5 on Tune and
-            // x=305 on Space, one line 1pt higher than the other — a hanging
-            // indent that moved when you changed page.
+            // one width or one baseline: free-sized, the glyph left the text
+            // starting at x=304.5 on Tune and x=305 on Space, a hanging indent
+            // that moved when you changed page.
             Image(systemName: symbol)
-                .font(.system(size: Typo.Step.caption, weight: .medium))
+                .glyph(.caption, weight: .medium)
                 .foregroundStyle(tint)
                 .frame(width: 13, height: 13)
                 .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
             Text(text)
                 .font(Typo.caption)
                 .foregroundStyle(Palette.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(text)
             Spacer(minLength: Space.sm)
-            trailing
         }
+        .frame(height: Space.lg, alignment: .center)
     }
 }
 
-// MARK: - Buttons
-
-/// The single prominent action on a page. There is never more than one.
-public struct PrimaryButtonStyle: ButtonStyle {
-    var tint: Color = Palette.aqua
-    var wide: Bool = false
-
-    @ViewBuilder
-    public func makeBody(configuration: Configuration) -> some View {
-        if #available(macOS 26.0, *) {
-            configuration.label
-                .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.white)
-                .padding(.horizontal, wide ? Space.xxl : Space.xl)
-                .padding(.vertical, Space.md)
-                .frame(maxWidth: wide ? .infinity : nil)
-                // Use the system material directly so highlights, lensing and
-                // pointer response follow the current macOS glass appearance.
-                .glassEffect(.regular.tint(tint).interactive(), in: Capsule(style: .continuous))
-                .opacity(configuration.isPressed ? 0.82 : 1)
-                .contentShape(Capsule(style: .continuous))
-        } else {
-            configuration.label
-                .font(.system(size: Typo.Step.subhead, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.white)
-                .padding(.horizontal, wide ? Space.xxl : Space.xl)
-                .padding(.vertical, Space.md)
-                .frame(maxWidth: wide ? .infinity : nil)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(tint.gradient)
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .stroke(Color.white.opacity(0.28), lineWidth: 0.75)
-                                .blendMode(.plusLighter)
-                        }
-                }
-                .shadow(color: tint.opacity(0.34), radius: 14, y: 5)
-                .scaleEffect(configuration.isPressed ? 0.975 : 1)
-                .animation(.snappy(duration: 0.16), value: configuration.isPressed)
-                .contentShape(Capsule(style: .continuous))
-        }
-    }
-}
-
-/// Quiet actions that sit beside the primary one.
-public struct GhostButtonStyle: ButtonStyle {
-    var tint: Color = Palette.ink
-
-    public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Typo.bodyStrong)
-            .foregroundStyle(tint)
-            .padding(.horizontal, Space.lg)
-            .padding(.vertical, Space.sm)
-            .glassSurface(Capsule(style: .continuous), level: .interactive)
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .animation(.snappy(duration: 0.14), value: configuration.isPressed)
-            .contentShape(Capsule(style: .continuous))
-    }
-}
-
-// MARK: - Chips
+// MARK: - Safety
 
 /// How risky is it to remove this?
 ///
-/// Every removable thing in the app carries one of these. It is the main device
-/// that lets a non-technical person act confidently without reading paths.
+/// Every removable thing in the app carries one of these. It is the main
+/// device that lets a non-technical person act confidently without reading
+/// paths.
 public enum Safety: Sendable {
     case safe
     case review
@@ -328,45 +204,211 @@ public enum Safety: Sendable {
     }
 }
 
-public struct SafetyChip: View {
-    private let safety: Safety
-    private let compact: Bool
+// MARK: - Badge
 
-    public init(_ safety: Safety, compact: Bool = false) {
-        self.safety = safety
-        self.compact = compact
+/// One badge for the whole app.
+///
+/// It replaces nine separate implementations that between them used three
+/// point sizes (9/10/11), four vertical insets (1.5/2/2.5/3), three weights,
+/// two fills and two shapes — enough variation that no two labels in the app
+/// sat on the same grid, and none of it meant anything.
+public struct Badge: View {
+    public enum Size {
+        /// The default: safety chips, stat badges, "runs at login", "system".
+        case standard
+        /// Inside dense rows, where a standard badge would set the row height.
+        case compact
+    }
+
+    public enum Style {
+        /// A tinted wash behind tinted text. The tint carries the meaning.
+        case tinted(Color)
+        /// A quiet well behind tertiary text. For facts, not warnings.
+        case neutral
+        /// A filled count. Only inside a button that is already an action.
+        case count(Color)
+    }
+
+    private let text: String?
+    private let symbol: String?
+    private let size: Size
+    private let style: Style
+
+    public init(
+        _ text: String? = nil,
+        symbol: String? = nil,
+        size: Size = .standard,
+        style: Style = .neutral
+    ) {
+        self.text = text
+        self.symbol = symbol
+        self.size = size
+        self.style = style
+    }
+
+    /// The safety chip, which is a badge whose text, symbol and tint all come
+    /// from one value.
+    public init(_ safety: Safety, size: Size = .standard) {
+        self.text = size == .standard ? safety.label : nil
+        self.symbol = safety.symbol
+        self.size = size
+        self.style = .tinted(safety.tint)
+    }
+
+    /// A running total inside an action.
+    public static func count(_ value: Int, tint: Color = Palette.aqua) -> Badge {
+        Badge("\(value)", size: .standard, style: .count(tint))
     }
 
     public var body: some View {
         HStack(spacing: Space.xs) {
-            Image(systemName: safety.symbol)
-                .font(.system(size: compact ? 8 : 9, weight: .bold))
-            if !compact {
-                Text(safety.label)
-                    .font(Typo.overline)
+            if let symbol {
+                Image(systemName: symbol)
+                    .glyph(.badge, weight: .bold)
+            }
+            if let text {
+                Text(text)
+                    .font(font)
+                    .monospacedDigit()
             }
         }
-        .foregroundStyle(safety.tint)
-        .padding(.horizontal, compact ? Space.xs : Space.sm)
-        .padding(.vertical, compact ? 2 : 3)
-        .background {
-            Capsule(style: .continuous)
-                .fill(safety.tint.opacity(0.14))
+        .foregroundStyle(foreground)
+        .lineLimit(1)
+        .padding(.horizontal, textOnlySymbol ? 0 : horizontalPadding)
+        .frame(
+            width: textOnlySymbol ? height : nil,
+            height: height
+        )
+        .background { Capsule(style: .continuous).fill(fill) }
+        .accessibilityLabel(text ?? "")
+    }
+
+    /// A compact badge carrying only a symbol is a square, not a stub capsule.
+    private var textOnlySymbol: Bool { text == nil && symbol != nil }
+
+    private var height: CGFloat { size == .standard ? 18 : 16 }
+    private var horizontalPadding: CGFloat { size == .standard ? Space.sm : 6 }
+
+    private var font: Font {
+        if case .count = style { return Typo.captionNumeric.weight(.bold) }
+        return size == .standard ? Typo.overline : Typo.tag
+    }
+
+    private var foreground: Color {
+        switch style {
+        case .tinted(let color): return color
+        case .neutral: return Palette.inkTertiary
+        case .count: return Palette.onAccent
         }
-        .accessibilityLabel(safety.label)
+    }
+
+    private var fill: AnyShapeStyle {
+        switch style {
+        case .tinted(let color): return AnyShapeStyle(color.opacity(0.14))
+        case .neutral: return AnyShapeStyle(Palette.wellFill)
+        case .count(let color): return AnyShapeStyle(color.gradient)
+        }
+    }
+}
+
+// MARK: - Readings
+
+/// A measurement: a number and, separately, the unit it is measured in.
+///
+/// "4.31 GB" is not one word. Setting the unit a step down and a shade back
+/// lets a column of readings be scanned by their numbers, which is the only
+/// part that differs between rows.
+public struct Reading: View {
+    public enum Emphasis {
+        /// The headline number on a stat card. `metric` 24.
+        case metric
+        /// A heading-sized reading: a category total, free space.
+        case heading
+        /// A row's own size. `labelNumeric` 12.
+        case row
+        /// A dense row or a legend. `captionNumeric` 11.
+        case dense
+    }
+
+    /// What counts as a unit worth setting apart.
+    ///
+    /// The split has to be conservative, because not every value with a space
+    /// in it is a measurement: "M5 Max" and "5 小时 3 分" are single readings
+    /// and setting their tail as a unit would be nonsense. Only a recognised
+    /// unit gets demoted; anything else stays one string.
+    private static let knownUnits: Set<String> = [
+        "B", "KB", "MB", "GB", "TB", "PB",
+        "B/s", "KB/s", "MB/s", "GB/s", "TB/s"
+    ]
+
+    private let value: String
+    private let unit: String
+    private let emphasis: Emphasis
+    private let tint: Color
+
+    public init(_ formatted: String, emphasis: Emphasis = .row, tint: Color = Palette.ink) {
+        let split = Reading.parts(formatted)
+        self.value = split.value
+        self.unit = split.unit
+        self.emphasis = emphasis
+        self.tint = tint
+    }
+
+    /// Divides a formatted reading into the quantity and the unit it is
+    /// measured in, or leaves it whole when the tail is not a unit.
+    public static func parts(_ formatted: String) -> (value: String, unit: String) {
+        guard let space = formatted.lastIndex(of: " ") else { return (formatted, "") }
+        let tail = String(formatted[formatted.index(after: space)...])
+        guard knownUnits.contains(tail) else { return (formatted, "") }
+        return (String(formatted[formatted.startIndex..<space]), tail)
+    }
+
+    public init(bytes: Int64, emphasis: Emphasis = .row, tint: Color = Palette.ink) {
+        self.init(Bytes.format(bytes), emphasis: emphasis, tint: tint)
+    }
+
+    public var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
+            Text(value)
+                .font(valueFont)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .foregroundStyle(tint)
+            if !unit.isEmpty {
+                Text(unit)
+                    .font(unitFont)
+                    .foregroundStyle(Palette.inkTertiary)
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private var valueFont: Font {
+        switch emphasis {
+        case .metric: return Typo.metric
+        case .heading: return Typo.subheadNumeric
+        case .row: return Typo.labelNumeric
+        case .dense: return Typo.captionNumeric
+        }
+    }
+
+    /// The unit is always a step down and a shade back. At `metric` the step
+    /// is bigger, because 24 against 11 would read as a footnote rather than
+    /// as the ruler the number is measured on.
+    private var unitFont: Font {
+        emphasis == .metric ? Typo.cardTitle : Typo.caption
     }
 }
 
 // MARK: - Search field
 
-/// The app's one search control, so every page's search looks, sizes and
-/// clears the same way.
-///
-/// It lived inside `AppsView` and Monitor had copied its twenty-two lines
-/// verbatim rather than importing it, which is how the two widths happened.
+/// The app's one search control. It takes no size: the row it sits in gives
+/// it one, which is what finally makes it the same height as its neighbours.
 public struct SearchField: View {
     @Binding var text: String
     let prompt: String
+
+    @Environment(\.rowControlHeight) private var height
 
     public init(text: Binding<String>, prompt: String) {
         self._text = text
@@ -376,17 +418,17 @@ public struct SearchField: View {
     public var body: some View {
         HStack(spacing: Space.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: Typo.Step.caption))
+                .glyph(.control)
                 .foregroundStyle(Palette.inkTertiary)
             TextField(prompt, text: $text)
                 .textFieldStyle(.plain)
-                .font(Typo.labelPlain)
+                .font(Typo.body)
             if !text.isEmpty {
                 Button {
                     text = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: Typo.Step.caption))
+                        .glyph(.control)
                         .foregroundStyle(Palette.inkFaint)
                 }
                 .buttonStyle(.plain)
@@ -394,13 +436,10 @@ public struct SearchField: View {
             }
         }
         .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm)
-        .glassSurface(Capsule(style: .continuous))
-        // Sized here, not at the call site. Apps asked for 260 and Monitor
-        // for 300, so the app's "one search control" came in two widths on
-        // two pages that sit one click apart.
-        .frame(maxWidth: 260)
-        .animation(.smooth(duration: 0.2), value: text.isEmpty)
+        .frame(height: height)
+        .frame(maxWidth: Layout.searchWidth)
+        .glassSurface(Capsule(style: .continuous), level: .interactive)
+        .animation(Motion.hover, value: text.isEmpty)
     }
 }
 
@@ -421,6 +460,8 @@ public struct TriStateBox: View {
     private let enabled: Bool
     private let action: () -> Void
 
+    private let side: CGFloat = 16
+
     public init(
         state: Mark,
         tint: Color = Palette.aqua,
@@ -436,47 +477,68 @@ public struct TriStateBox: View {
     public var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                     .fill(state == .off ? AnyShapeStyle(Color.clear) : AnyShapeStyle(tint.gradient))
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .strokeBorder(
-                        state == .off ? Palette.inkFaint : Color.clear,
-                        lineWidth: 1.2
-                    )
+                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                    .strokeBorder(state == .off ? Palette.inkFaint : Color.clear, lineWidth: 1)
                 if state == .on {
                     Image(systemName: "checkmark")
-                        .font(.system(size: Typo.Step.micro, weight: .black))
-                        .foregroundStyle(.white)
+                        .glyph(.badge, weight: .black)
+                        .foregroundStyle(Palette.onAccent)
                 } else if state == .mixed {
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
-                        .fill(Color.white)
+                        .fill(Palette.onAccent)
                         .frame(width: 8, height: 2)
                 }
             }
-            .frame(width: 17, height: 17)
+            .frame(width: side, height: side)
+            // Vertically the target is a full control tier; horizontally it
+            // stays 16, because this column is the first term in the row's
+            // title edge (16 + 12 + 32 + 12 = 72 from the row's inner edge)
+            // and widening it moves every list title in the app.
+            .frame(width: side, height: Control.compact)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.4)
-        .animation(.snappy(duration: 0.18), value: state)
+        .actionEnabled(enabled)
+        .animation(Motion.state, value: state)
         .accessibilityAddTraits(state == .on ? [.isSelected] : [])
+    }
+}
+
+/// The width a checkbox would take, for rows in lists that have no selection.
+///
+/// It looks like nothing and it is the reason a row title starts in the same
+/// place whether or not its list can be selected — which matters most on a
+/// page whose two tabs differ in exactly that, where the titles would
+/// otherwise shift 28pt sideways as you switch.
+public struct RowLeadingSpacer: View {
+    public init() {}
+
+    public var body: some View {
+        Color.clear.frame(width: 16, height: Control.compact)
     }
 }
 
 // MARK: - Capacity bar
 
-/// A slim horizontal fill. Used in the sidebar footer and in list rows where a
-/// ring would be too heavy.
+/// A slim horizontal fill. Two heights: 4 inside a card or a row, 6 where it
+/// is the thing you are meant to read.
 public struct CapacityBar: View {
+    public enum Weight {
+        case thin, thick
+
+        var height: CGFloat { self == .thin ? 4 : 6 }
+    }
+
     private let fraction: Double
     private let tint: Color
-    private let height: CGFloat
+    private let weight: Weight
 
-    public init(fraction: Double, tint: Color = Palette.aqua, height: CGFloat = 6) {
+    public init(fraction: Double, tint: Color = Palette.aqua, weight: Weight = .thin) {
         self.fraction = min(1, max(0, fraction))
         self.tint = tint
-        self.height = height
+        self.weight = weight
     }
 
     public var body: some View {
@@ -486,11 +548,11 @@ public struct CapacityBar: View {
                     .fill(Palette.wellFill)
                 Capsule(style: .continuous)
                     .fill(tint.gradient)
-                    .frame(width: max(fraction > 0 ? height : 0, geo.size.width * fraction))
+                    .frame(width: max(fraction > 0 ? weight.height : 0, geo.size.width * fraction))
             }
         }
-        .frame(height: height)
-        .animation(.smooth(duration: 0.5), value: fraction)
+        .frame(height: weight.height)
+        .animation(Motion.settle, value: fraction)
     }
 }
 
@@ -512,7 +574,7 @@ public struct RestfulState: View {
     public var body: some View {
         VStack(spacing: Space.md) {
             Image(systemName: symbol)
-                .font(.system(size: Typo.Step.feature, weight: .light))
+                .glyph(.feature)
                 .foregroundStyle(Palette.aqua)
             Text(title)
                 .font(Typo.cardTitle)
@@ -549,13 +611,9 @@ public struct SectionLabel: View {
 
 /// The one card used for every headline number in the app.
 ///
-/// The Overview and Monitor grids used to build their own card, and each let
-/// its optional pieces collapse when unused — an `EmptyView` carrying a
-/// `.frame(height:)` still occupies nothing — so a card with a progress bar or
-/// a chart stood taller than its neighbours and the row centred the short ones
-/// against it. Every slot here is *reserved* whether or not it is filled, and
-/// the page declares the slot heights once for the whole grid, so a row of
-/// these is equal-height by construction rather than by luck.
+/// Every slot here is *reserved* whether or not it is filled, and the page
+/// declares the slot heights once for the whole grid, so a row of these is
+/// equal-height by construction rather than by luck.
 public struct StatCard<Chart: View, Extra: View>: View {
     private let symbol: String
     private let label: String
@@ -606,11 +664,7 @@ public struct StatCard<Chart: View, Extra: View>: View {
             VStack(alignment: .leading, spacing: Space.sm) {
                 header
 
-                Text(value)
-                    .font(Typo.metric)
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.ink)
-                    .contentTransition(.numericText())
+                Reading(value, emphasis: .metric)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .frame(height: 29, alignment: .leading)
@@ -619,13 +673,9 @@ public struct StatCard<Chart: View, Extra: View>: View {
                 // in it is an `EmptyView` — and the content rides in an
                 // *overlay* rather than a `ZStack`, which is what keeps the
                 // card inside its column. A `ZStack` is as wide as its widest
-                // child: measured in a 249pt column, the memory legend's 252pt
-                // in Chinese made the card 296pt and its 287pt in English made
-                // it 331pt, spilling 47 and 82pt into the gutters either side
-                // and running the card's own detail line into its neighbour's.
-                // An overlay never contributes to layout, so the slot is
-                // exactly the width it was given, no matter what goes in it or
-                // in which language.
+                // child: measured in a 249pt column, the memory legend made
+                // the card 296pt and spilled into both gutters. An overlay
+                // never contributes to layout.
                 if let chartHeight {
                     Color.clear
                         .frame(height: chartHeight)
@@ -644,10 +694,10 @@ public struct StatCard<Chart: View, Extra: View>: View {
 
                 if reservesProgress {
                     Color.clear
-                        .frame(height: 4)
+                        .frame(height: CapacityBar.Weight.thin.height)
                         .overlay {
                             if let progress {
-                                CapacityBar(fraction: progress, tint: tint, height: 4)
+                                CapacityBar(fraction: progress, tint: tint)
                             }
                         }
                 }
@@ -668,7 +718,7 @@ public struct StatCard<Chart: View, Extra: View>: View {
     private var header: some View {
         HStack(spacing: Space.sm) {
             Image(systemName: symbol)
-                .font(.system(size: Typo.Step.caption))
+                .glyph(.caption)
                 .foregroundStyle(tint)
             Text(label)
                 .font(Typo.label)
@@ -676,12 +726,7 @@ public struct StatCard<Chart: View, Extra: View>: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
             if let badge {
-                Text(badge)
-                    .font(Typo.overline)
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, Space.sm)
-                    .padding(.vertical, 2.5)
-                    .background { Capsule().fill(tint.opacity(0.14)) }
+                Badge(badge, style: .tinted(tint))
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
             }
         }
@@ -691,20 +736,12 @@ public struct StatCard<Chart: View, Extra: View>: View {
 
 /// A row of stat cards on explicit, equal-width columns.
 ///
-/// The ragged rows this replaces were not a spacing bug — measured at runtime,
-/// `GridItem(.adaptive(minimum:))` lays four cards out in exactly the same
-/// frames as four `.flexible()` columns. The fault is the *column count*.
-/// Adaptive fits as many columns as the container allows and leaves the rest
-/// empty: at the default window width four cards get three columns and land as
-/// a row of three with one card stranded underneath, and in a wider container
-/// they get five columns and stop short of the right edge by a whole card.
-///
-/// Counting the cards fixes both. There is never a column without a card in
-/// it, and when they cannot all share one row the split is even (2 + 2 rather
-/// than 3 + 1), so a wrapped row still reads as a deliberate grid.
-///
-/// Top alignment matters too: without it a shorter card is centred against a
-/// taller neighbour, which is the other half of what made these rows ragged.
+/// The ragged rows this replaces were not a spacing bug: `GridItem(.adaptive)`
+/// fits as many columns as the container allows and leaves the rest empty, so
+/// four cards got three columns and landed as a row of three with one card
+/// stranded underneath. Counting the cards fixes both that and the uneven
+/// split. Top alignment is the other half — without it a shorter card is
+/// centred against a taller neighbour.
 public struct StatCardGrid<Content: View>: View {
     private let minimum: CGFloat
     private let spacing: CGFloat
@@ -715,7 +752,7 @@ public struct StatCardGrid<Content: View>: View {
     @State private var width: CGFloat = 0
 
     public init(
-        minimum: CGFloat,
+        minimum: CGFloat = Layout.statCardMinimum,
         spacing: CGFloat = Space.md,
         @ViewBuilder content: () -> Content
     ) {
@@ -756,8 +793,7 @@ public struct StatCardGrid<Content: View>: View {
         guard ceiling > 1 else { return 1 }
 
         // An even split is worth giving up one column for, but not worth
-        // collapsing to a single file: five cards in a four-card row stay
-        // 4 + 1 rather than becoming one long column.
+        // collapsing to a single file.
         let floor = (ceiling + 1) / 2
         for candidate in stride(from: ceiling, through: floor, by: -1)
         where cards % candidate == 0 {
@@ -783,19 +819,19 @@ public struct LegendDot: View {
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Space.xs) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(color)
                 .frame(width: 7, height: 7)
             if let label {
                 Text(label)
-                    .font(.system(size: Typo.Step.overline))
+                    .font(Typo.overline)
                     .foregroundStyle(Palette.inkTertiary)
                     .lineLimit(1)
             }
             if let value {
                 Text(value)
-                    .font(.system(size: Typo.Step.overline, weight: .semibold, design: .rounded))
+                    .font(Typo.overline)
                     .monospacedDigit()
                     .foregroundStyle(color)
                     .contentTransition(.numericText())
@@ -806,26 +842,16 @@ public struct LegendDot: View {
             }
         }
         // Deliberately not `.fixedSize()`. A legend that refuses to compress
-        // does not stay legible — it drags its card out of the grid. See
-        // `LegendRow`, which is how a row of these is meant to be built.
+        // does not stay legible — it drags its card out of the grid.
     }
 }
 
 /// A row of legend entries that gives way instead of pushing its card wider.
 ///
-/// Measured in an `NSHostingView`, in both languages: the memory card's three
-/// entries want 287pt in English and 252pt in Chinese, and the four-column
-/// grid this row lives in gives a card 204–244pt inside its padding. So the
-/// row has four forms — normal gutters, tight gutters, two lines, and swatch
-/// with reading only — and takes the first that fits.
-///
-/// Wrapping earns its place: dropping straight from one line to swatches took
-/// every label off the memory card at every four-column width in English and
-/// all but the very widest in Chinese, which is the common case on a large
-/// display, not an edge. Wrapped, the same entries need 167pt and every label
-/// survives at every width the window can reach. The swatch-only form stays
-/// as the floor below that; it is still decodable, because the swatch colours
-/// are the colours of the chart immediately above it.
+/// Measured in both languages: the memory card's three entries want 287pt in
+/// English and 252pt in Chinese, and the grid gives a card 204–244pt inside
+/// its padding. So the row has four forms — normal gutters, tight gutters,
+/// two lines, and swatch with reading only — and takes the first that fits.
 public struct LegendRow: View {
     public struct Entry: Identifiable {
         public let id: String
@@ -866,8 +892,6 @@ public struct LegendRow: View {
     }
 
     /// The same entries over two lines, the first taking the ceiling half.
-    /// Two lines measure 28pt, so a card that wants this form has to reserve
-    /// an `extraHeight` of at least that — see the gauges in `MonitorView`.
     private var wrapped: some View {
         let split = (entries.count + 1) / 2
         return VStack(alignment: .leading, spacing: 2) {
@@ -888,8 +912,7 @@ public struct LegendRow: View {
 // MARK: - Segmented bar
 
 /// A stacked bar whose segments each carry their own colour, for a total made
-/// of distinguishable parts — memory split into app, wired and compressed,
-/// rather than one anonymous fill.
+/// of distinguishable parts.
 public struct SegmentedBar: View {
     public struct Segment: Identifiable, Equatable {
         public let id: String
@@ -904,11 +927,10 @@ public struct SegmentedBar: View {
     }
 
     private let segments: [Segment]
-    private let height: CGFloat
+    private let height: CGFloat = 6
 
-    public init(segments: [Segment], height: CGFloat = 6) {
+    public init(segments: [Segment]) {
         self.segments = segments
-        self.height = height
     }
 
     public var body: some View {
@@ -926,7 +948,7 @@ public struct SegmentedBar: View {
             .clipShape(Capsule(style: .continuous))
         }
         .frame(height: height)
-        .animation(.smooth(duration: 0.45), value: segments)
+        .animation(Motion.settle, value: segments)
     }
 }
 
@@ -934,10 +956,8 @@ public struct SegmentedBar: View {
 
 /// One or more series over a shared time window.
 ///
-/// Each series keeps its own colour so two quantities on one chart — user
-/// versus system CPU, download versus upload — stay tellable apart. Series are
-/// normalised against the *combined* peak so their relative heights stay
-/// honest; normalising each against its own peak would draw a trickle of
+/// Series are normalised against the *combined* peak so their relative heights
+/// stay honest; normalising each against its own peak would draw a trickle of
 /// upload as tall as a flood of download.
 public struct Sparkline: View {
     public struct Series {
@@ -1004,11 +1024,7 @@ public struct Sparkline: View {
 
 // MARK: - Row interaction
 
-/// Hover and press feedback for list rows.
-///
-/// Rows in this app are targets — uninstall, run, reveal — so they should feel
-/// like it under the pointer. The scale is deliberately tiny: enough to confirm
-/// the row is live, not enough to shuffle the layout around it.
+/// Hover and press feedback for list rows. One hover value for the app: 6%.
 public struct RowInteraction: ViewModifier {
     var radius: CGFloat = Radius.card
     var tint: Color = Palette.aqua
@@ -1020,11 +1036,11 @@ public struct RowInteraction: ViewModifier {
         content
             .background {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(tint.opacity(hovering ? 0.07 : 0))
+                    .fill(tint.opacity(hovering ? 0.06 : 0))
             }
             .scaleEffect(pressed ? 0.992 : 1)
-            .animation(.smooth(duration: 0.2), value: hovering)
-            .animation(.snappy(duration: 0.14), value: pressed)
+            .animation(Motion.hover, value: hovering)
+            .animation(Motion.press, value: pressed)
             .onHover { hovering = $0 }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
@@ -1041,44 +1057,36 @@ extension View {
     ) -> some View {
         modifier(RowInteraction(radius: radius, tint: tint))
     }
-}
 
-// MARK: - Count pill
-
-/// A small running total, used where a selection builds up.
-public struct CountPill: View {
-    private let count: Int
-    private let tint: Color
-
-    public init(_ count: Int, tint: Color = Palette.aqua) {
-        self.count = count
-        self.tint = tint
-    }
-
-    public var body: some View {
-        Text("\(count)")
-            .font(.system(size: Typo.Step.caption, weight: .bold, design: .rounded))
-            .monospacedDigit()
-            .contentTransition(.numericText())
-            .foregroundStyle(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1.5)
-            .background { Capsule().fill(tint.gradient) }
+    /// The selected appearance every list in the app shares: an 8% wash and a
+    /// 1.5pt edge, so a long list still reads once it is scrolled away from
+    /// the checkboxes.
+    public func rowSelection(_ selected: Bool, hovering: Bool = false, radius: CGFloat = Radius.card) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return background {
+            shape.fill(Palette.aqua.opacity(selected ? 0.08 : (hovering ? 0.06 : 0)))
+        }
+        .overlay {
+            shape.strokeBorder(Palette.aqua.opacity(selected ? 0.5 : 0), lineWidth: 1.5)
+        }
+        .animation(Motion.state, value: selected)
+        .animation(Motion.hover, value: hovering)
     }
 }
 
-// MARK: - Toolbar-style action bar
+// MARK: - Selection bar
 
-/// The persistent bar a page puts above a list of tickable things.
+/// The persistent bar above a list of tickable things.
 ///
-/// Earlier versions only revealed the run button once something was selected,
-/// on the theory that a disabled button reads as broken chrome. In practice it
-/// read as *no* button: nothing on screen said batch operation was possible.
-/// The bar is always there, and says how many are selected.
+/// It is always on screen. Revealing it only once something was selected read
+/// as *no* batch feature at all — nothing on the page said the operation
+/// existed. It also now carries the total it is about to act on: the size of
+/// a batch is the thing you want to know before you run one, not after.
 public struct SelectionBar<Actions: View>: View {
     private let selectedCount: Int
     private let totalCount: Int
     private let allSelected: Bool
+    private let impact: String?
     private let onToggleAll: () -> Void
     private let actions: Actions
 
@@ -1086,12 +1094,14 @@ public struct SelectionBar<Actions: View>: View {
         selectedCount: Int,
         totalCount: Int,
         allSelected: Bool,
+        impact: String? = nil,
         onToggleAll: @escaping () -> Void,
         @ViewBuilder actions: () -> Actions
     ) {
         self.selectedCount = selectedCount
         self.totalCount = totalCount
         self.allSelected = allSelected
+        self.impact = impact
         self.onToggleAll = onToggleAll
         self.actions = actions()
     }
@@ -1103,35 +1113,40 @@ public struct SelectionBar<Actions: View>: View {
                 action: onToggleAll
             )
 
-            Button(action: onToggleAll) {
-                Text(allSelected ? t("取消全选", "Deselect all") : t("全选", "Select all"))
-                    .font(Typo.label)
-                    .foregroundStyle(Palette.flow)
-            }
-            .buttonStyle(.plain)
+            Button(allSelected ? t("取消全选", "Deselect all") : t("全选", "Select all"), action: onToggleAll)
+                .buttonStyle(TextButtonStyle())
 
             HStack(spacing: Space.xs) {
                 Text(t("已选", "Selected"))
                     .font(Typo.caption)
                     .foregroundStyle(Palette.inkTertiary)
                 Text("\(selectedCount)")
-                    .font(.system(size: Typo.Step.body, weight: .semibold, design: .rounded))
+                    .font(Typo.bodyNumeric)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(selectedCount > 0 ? Palette.ink : Palette.inkTertiary)
                 Text("/ \(totalCount)")
-                    .font(Typo.caption) 
+                    .font(Typo.caption)
                     .monospacedDigit()
                     .foregroundStyle(Palette.inkFaint)
+            }
+
+            if let impact, selectedCount > 0 {
+                Text("·")
+                    .font(Typo.caption)
+                    .foregroundStyle(Palette.inkFaint)
+                Reading(impact, emphasis: .dense, tint: Palette.inkSecondary)
+                    .transition(.opacity)
             }
 
             Spacer(minLength: Space.sm)
 
             actions
         }
-        .animation(.smooth(duration: 0.25), value: selectedCount)
+        .imposesControlHeight(Control.standard)
+        .animation(Motion.state, value: selectedCount)
         .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm + 2)
+        .frame(height: Layout.actionBar)
         .glassPanel(radius: Radius.row)
     }
 }

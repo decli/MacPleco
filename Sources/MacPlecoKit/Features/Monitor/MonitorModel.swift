@@ -25,7 +25,7 @@ public enum ProcessSortMetric: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-public enum ProcessOrderMode: String, CaseIterable, Identifiable, Sendable {
+public enum ProcessOrderMode: String, CaseIterable, Identifiable, Sendable, TitledChoice {
     case live
     case fixed
 
@@ -45,7 +45,7 @@ public enum ProcessOrderMode: String, CaseIterable, Identifiable, Sendable {
 /// of my apps is eating the battery" and "what is macOS doing in the
 /// background". Mixed together, the system's dozens of daemons bury the
 /// handful of rows a person can actually act on.
-public enum ProcessScope: String, CaseIterable, Identifiable, Sendable {
+public enum ProcessScope: String, CaseIterable, Identifiable, Sendable, TitledChoice {
     case all
     case apps
     case system

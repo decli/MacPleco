@@ -5,7 +5,7 @@ import Observation
 @MainActor
 public final class AppsModel {
 
-    public enum Tab: String, CaseIterable, Identifiable {
+    public enum Tab: String, CaseIterable, Identifiable, TitledChoice {
         case installed
         case startup
 
@@ -19,7 +19,7 @@ public final class AppsModel {
         }
     }
 
-    public enum SortKey: String, CaseIterable, Identifiable {
+    public enum SortKey: String, CaseIterable, Identifiable, TitledChoice {
         case lastUsed
         case size
         case name
@@ -40,7 +40,7 @@ public final class AppsModel {
     /// "Runs at login" first is the one that answers the question the page is
     /// really for — *what actually starts when I turn this Mac on* — which the
     /// old fixed ordering buried among entries that only sit there registered.
-    public enum StartupSortKey: String, CaseIterable, Identifiable {
+    public enum StartupSortKey: String, CaseIterable, Identifiable, TitledChoice {
         case runsAtLoad
         case name
         case scope
@@ -209,6 +209,15 @@ public final class AppsModel {
     }
 
     public var selectedCount: Int { selection.count }
+
+    /// What the current selection weighs. The selection bar shows it, because
+    /// the size of a batch is what you want to know *before* running one.
+    /// Bundle size only: leftovers are not measured until the plan is built.
+    public func selectedSize(registry: AppRegistry) -> Int64 {
+        registry.apps.reduce(Int64(0)) { total, app in
+            selection.contains(app.id) ? total + max(0, app.size) : total
+        }
+    }
 
     // MARK: - Uninstall
 
