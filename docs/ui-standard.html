@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacPleco 界面标准 v2.0</title>
+<style>
+  /* ---------------------------------------------------------------
+     Deep Water — the app's own palette, so the document is set in the
+     material it describes. Every specimen below is drawn at 1 CSS px
+     per point, which is the only way a size table can be checked by eye.
+     --------------------------------------------------------------- */
+  :root {
+    color-scheme: light;
+    --ground-a: #EFF5FA;
+    --ground-b: #E2EDF7;
+    --ground-c: #D3E2F0;
+    --glass: rgba(255,255,255,0.62);
+    --control-fill: rgba(255,255,255,0.72);
+    --control-stroke: rgba(11,24,38,0.20);
+    --well: rgba(11,24,38,0.045);
+    --hair: rgba(11,24,38,0.10);
+    --hair-strong: rgba(11,24,38,0.16);
+    --ink: #0B1826;
+    --ink-2: rgba(11,24,38,0.66);
+    --ink-3: rgba(11,24,38,0.46);
+    --ink-4: rgba(11,24,38,0.28);
+    --aqua: #0B8F84;
+    --aqua-bright: #11B3A4;
+    --go-top: #0A8378;
+    --go-mid: #077268;
+    --go-end: #055C54;
+    --on-accent: #FFFFFF;
+    --flow: #1F6BD4;
+    --caution: #B0700A;
+    --danger: #CE3B36;
+    --danger-solid: #C0342F;
+    --positive: #1C8A4E;
+    --violet: #6D3BD1;
+    --aurora-1: rgba(83,214,193,0.30);
+    --aurora-2: rgba(116,178,242,0.28);
+    --aurora-3: rgba(164,149,236,0.20);
+    --shadow: 0 10px 28px rgba(11,24,38,0.08);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+           "Hiragino Sans GB", "Noto Sans CJK SC", "Helvetica Neue", sans-serif;
+    --rounded: "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground-a: #102437; --ground-b: #0A1626; --ground-c: #050B14;
+      --glass: rgba(255,255,255,0.07);
+      --control-fill: rgba(232,242,250,0.14);
+      --control-stroke: rgba(255,255,255,0.24);
+      --well: rgba(255,255,255,0.05);
+      --hair: rgba(255,255,255,0.10);
+      --hair-strong: rgba(255,255,255,0.18);
+      --ink: #F3F8FC;
+      --ink-2: rgba(243,248,252,0.66);
+      --ink-3: rgba(243,248,252,0.46);
+      --ink-4: rgba(243,248,252,0.26);
+      --aqua: #38D9C4; --aqua-bright: #62F0DA;
+      --go-top: #62F0DA; --go-mid: #38D9C4; --go-end: #1B9C93;
+      --on-accent: #061018;
+      --flow: #5AA6F8; --caution: #F3BC5C; --danger: #FF7A72;
+      --danger-solid: #8F2C28; --positive: #4ADE80; --violet: #B794F6;
+      --aurora-1: rgba(14,107,96,0.42);
+      --aurora-2: rgba(27,63,120,0.46);
+      --aurora-3: rgba(51,48,107,0.40);
+      --shadow: 0 10px 28px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground-a: #102437; --ground-b: #0A1626; --ground-c: #050B14;
+    --glass: rgba(255,255,255,0.07);
+    --control-fill: rgba(232,242,250,0.14);
+    --control-stroke: rgba(255,255,255,0.24);
+    --well: rgba(255,255,255,0.05);
+    --hair: rgba(255,255,255,0.10);
+    --hair-strong: rgba(255,255,255,0.18);
+    --ink: #F3F8FC;
+    --ink-2: rgba(243,248,252,0.66);
+    --ink-3: rgba(243,248,252,0.46);
+    --ink-4: rgba(243,248,252,0.26);
+    --aqua: #38D9C4; --aqua-bright: #62F0DA;
+    --go-top: #62F0DA; --go-mid: #38D9C4; --go-end: #1B9C93;
+    --on-accent: #061018;
+    --flow: #5AA6F8; --caution: #F3BC5C; --danger: #FF7A72;
+    --danger-solid: #8F2C28; --positive: #4ADE80; --violet: #B794F6;
+    --aurora-1: rgba(14,107,96,0.42);
+    --aurora-2: rgba(27,63,120,0.46);
+    --aurora-3: rgba(51,48,107,0.40);
+    --shadow: 0 10px 28px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--sys);
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink);
+    background:
+      radial-gradient(60% 55% at 12% 8%, var(--aurora-1), transparent 70%),
+      radial-gradient(50% 45% at 90% 18%, var(--aurora-2), transparent 70%),
+      radial-gradient(45% 40% at 70% 92%, var(--aurora-3), transparent 70%),
+      linear-gradient(var(--ground-a), var(--ground-b) 55%, var(--ground-c));
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--flow); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible { outline: 2px solid var(--flow); outline-offset: 2px; border-radius: 3px; }
+  code { font-family: var(--mono); font-size: 0.86em; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 48px 28px 96px; }
+
+  /* Masthead — the document opens the way the app does. */
+  header.doc { display: grid; grid-template-columns: 40px 1fr; gap: 16px; align-items: center; }
+  .mark {
+    width: 40px; height: 40px; border-radius: 11px;
+    background: linear-gradient(135deg, var(--go-top), var(--go-mid) 55%, var(--go-end));
+    display: grid; place-items: center; color: var(--on-accent);
+    box-shadow: 0 6px 14px rgba(11,143,132,0.32);
+  }
+  header.doc h1 { margin: 0; font-size: 27px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+  .meta { grid-column: 2; font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+          display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 2px; }
+  p.lede { font-size: 16px; color: var(--ink-2); max-width: 62ch; margin: 22px 0 0; }
+  .status { margin-top: 20px; padding: 12px 16px; border-radius: 12px;
+            background: color-mix(in srgb, var(--aqua) 12%, transparent);
+            border: 1px solid color-mix(in srgb, var(--aqua) 30%, transparent);
+            font-size: 13px; color: var(--ink-2); }
+  .status b { color: var(--ink); }
+
+  nav.toc { margin: 34px 0 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; }
+  nav.toc a { color: var(--ink-3); font-family: var(--mono); }
+  nav.toc a:hover { color: var(--flow); }
+
+  section { margin-top: 60px; }
+  section > h2 { font-size: 21px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.005em; }
+  section > h2 .n { font-family: var(--mono); font-weight: 500; color: var(--ink-3);
+                    font-size: 12px; margin-right: 10px; letter-spacing: 0.08em; }
+  section > p { color: var(--ink-2); max-width: 64ch; margin: 0 0 18px; }
+  h3 { font-size: 15px; font-weight: 600; margin: 30px 0 8px; }
+  .note { font-size: 12.5px; color: var(--ink-3); max-width: 64ch; }
+  .note b { color: var(--ink-2); font-weight: 600; }
+
+  /* Tables */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px;
+          background: var(--glass); border: 1px solid var(--hair-strong);
+          border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  th { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+       color: var(--ink-3); background: var(--well); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.k { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .dim { color: var(--ink-3); }
+  .bad { color: var(--danger); font-weight: 600; }
+  .good { color: var(--aqua); font-weight: 600; }
+
+  /* Specimen panes */
+  .spec { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; margin: 14px 0 4px; }
+  @media (max-width: 760px) { .spec { grid-template-columns: 1fr; } }
+  .pane { border-radius: 16px; border: 1px solid var(--hair-strong); background: var(--glass);
+          box-shadow: var(--shadow); overflow: hidden; }
+  .pane .cap { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+               padding: 8px 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+               text-transform: uppercase; color: var(--ink-3);
+               border-bottom: 1px solid var(--hair); background: var(--well); }
+  .cap .was { color: var(--danger); }
+  .cap .is  { color: var(--aqua); }
+  .stage { padding: 16px; }
+  .readout { padding: 10px 12px 12px; font-family: var(--mono); font-size: 11.5px;
+             color: var(--ink-2); border-top: 1px solid var(--hair); line-height: 1.75; }
+  .readout b { color: var(--ink); font-weight: 600; }
+
+  /* True-size app primitives. 1px = 1pt. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+         border-radius: 999px; white-space: nowrap; font-variant-numeric: tabular-nums;
+         font-family: var(--sys); border: 0; }
+  .btn.filled { color: var(--on-accent);
+    background: linear-gradient(135deg, var(--go-top), var(--go-mid) 55%, var(--go-end));
+    box-shadow: 0 5px 14px rgba(11,143,132,0.28); }
+  .btn.confirm { color: #fff; background: var(--danger-solid);
+                 box-shadow: 0 5px 14px rgba(192,52,47,0.28); }
+  .btn.outline { background: var(--control-fill); border: 1px solid var(--control-stroke); color: var(--ink); }
+  .btn.outline.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+                        background: color-mix(in srgb, var(--danger) 6%, var(--control-fill)); }
+  .btn.text { background: none; border: 0; color: var(--flow); padding: 0; font-size: 12px; font-weight: 500; }
+  .btn.text.quiet { color: var(--ink-3); }
+  .h44 { height: 44px; padding: 0 24px; font-size: 15px; font-weight: 600; }
+  .h36 { height: 36px; padding: 0 20px; font-size: 15px; font-weight: 600; }
+  .h28 { height: 28px; padding: 0 14px; font-size: 13px; font-weight: 600; }
+  .h24 { height: 24px; padding: 0 12px; font-size: 12px; font-weight: 500; }
+  .off { opacity: 0.4; }
+  .icbtn { width: 24px; height: 24px; display: inline-grid; place-items: center;
+           border-radius: 6px; color: var(--flow); font-size: 11px; }
+  .icbtn.danger { color: var(--danger); }
+  .cbox { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--ink-4); flex: none; }
+  .cbox.on { border-color: transparent; position: relative;
+             background: linear-gradient(135deg, var(--aqua-bright), var(--aqua)); }
+  .cbox.on::after { content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px;
+                    border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px;
+           font-weight: 600; white-space: nowrap; line-height: 1; }
+  .badge.std { height: 18px; padding: 0 8px; font-size: 10px; }
+  .badge.cmp { height: 16px; padding: 0 6px; font-size: 9px; }
+  .b-aqua { color: var(--aqua); background: color-mix(in srgb, var(--aqua) 14%, transparent); }
+  .b-caut { color: var(--caution); background: color-mix(in srgb, var(--caution) 14%, transparent); }
+  .b-dang { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+  .b-viol { color: var(--violet); background: color-mix(in srgb, var(--violet) 14%, transparent); }
+  .b-neut { color: var(--ink-3); background: var(--well); }
+  .b-count { color: var(--on-accent); height: 18px; padding: 0 7px; font-size: 11px; font-weight: 700;
+             background: linear-gradient(135deg, var(--aqua-bright), var(--aqua)); }
+  .b-count.dang { color: #fff; background: linear-gradient(135deg, #E25650, var(--danger-solid)); }
+  .tile { display: inline-grid; place-items: center; flex: none;
+          background: color-mix(in srgb, var(--aqua) 14%, transparent); color: var(--aqua); }
+  .t24 { width: 24px; height: 24px; border-radius: 6px; font-size: 11px; }
+  .t28 { width: 28px; height: 28px; border-radius: 8px; font-size: 15px; }
+  .t32 { width: 32px; height: 32px; border-radius: 8px; font-size: 15px; }
+  .t44 { width: 44px; height: 44px; border-radius: 12px; font-size: 20px; }
+  .tile.brand { color: var(--on-accent);
+                background: linear-gradient(135deg, var(--go-top), var(--go-mid) 55%, var(--go-end)); }
+  .tile.dang { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+  .search { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px;
+            background: var(--control-fill); border: 1px solid var(--control-stroke);
+            color: var(--ink-3); font-size: 13px; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 7px; background: var(--well);
+         border: 1px solid var(--hair); font-size: 13px; }
+  .seg span { padding: 0 10px; border-radius: 5px; display: inline-flex; align-items: center; color: var(--ink-2); }
+  .seg span.on { background: var(--control-fill); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.10); }
+  .pop { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px 0 10px;
+         border-radius: 6px; background: var(--control-fill); border: 1px solid var(--control-stroke);
+         font-size: 13px; box-shadow: 0 1px 1px rgba(0,0,0,0.05); }
+  .pop i { font-family: var(--mono); font-size: 9px; font-style: normal; color: var(--ink-3); }
+  .sw { display: inline-block; border-radius: 999px; background: var(--ink-4); position: relative; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 1.5px; left: 1.5px; background: #fff;
+               border-radius: 999px; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+  .sw.mini { width: 26px; height: 15px; } .sw.mini::after { width: 12px; height: 12px; }
+  .sw.small { width: 30px; height: 18px; } .sw.small::after { width: 15px; height: 15px; }
+  .bar { display: flex; align-items: center; gap: 12px; border-radius: 12px;
+         background: var(--control-fill); border: 1px solid var(--hair-strong); padding: 0 12px; }
+  .rowcard { display: flex; align-items: center; gap: 12px; border-radius: 16px;
+             background: var(--control-fill); border: 1px solid var(--hair-strong); padding: 0 12px; }
+  .appicon { width: 32px; height: 32px; border-radius: 8px; flex: none;
+             background: linear-gradient(135deg, #7FB8F0, #4E7FD1); }
+  .t13s { font-size: 13px; font-weight: 600; line-height: 16px; }
+  .t12  { font-size: 12px; font-weight: 500; line-height: 15px; }
+  .t11  { font-size: 11px; line-height: 14px; color: var(--ink-3); }
+  .t9m  { font-family: var(--mono); font-size: 9px; line-height: 12px; color: var(--ink-3); }
+  .rd   { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rd u { text-decoration: none; font-size: 11px; font-weight: 400; color: var(--ink-3); margin-left: 4px; }
+  .grow { flex: 1; }
+
+  /* Masthead diagram */
+  .mock { display: grid; grid-template-columns: 150px 1fr; height: 104px; position: relative; }
+  .mock .side { border-right: 1px solid var(--hair-strong); background: var(--well); position: relative; }
+  .mock .main { position: relative; }
+  .brandrow { position: absolute; display: flex; align-items: center; gap: 10px; }
+  .brandrow .bt17 { font-size: 17px; font-weight: 700; line-height: 20px; }
+  .brandrow .bt15 { font-size: 15px; font-weight: 600; line-height: 18px; color: var(--ink-2); }
+  .ptitle { position: absolute; left: 32px; font-size: 20px; font-weight: 700; line-height: 24px;
+            font-family: var(--rounded); }
+  .psub { position: absolute; left: 32px; font-size: 13px; line-height: 16px; color: var(--ink-2); }
+  .ptrail { position: absolute; right: 16px; }
+  .guide { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed; pointer-events: none; }
+  .guide.a { border-color: var(--aqua); } .guide.b { border-color: var(--danger); }
+  .guide .lbl { position: absolute; right: 6px; top: -15px; font-family: var(--mono); font-size: 10px;
+                background: var(--control-fill); padding: 1px 5px; border-radius: 4px; }
+  .guide.a .lbl { color: var(--aqua); } .guide.b .lbl { color: var(--danger); }
+
+  /* Token cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .card { border-radius: 16px; background: var(--glass); border: 1px solid var(--hair-strong); padding: 14px 16px; }
+  .card h4 { margin: 0 0 12px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+             color: var(--ink-3); font-weight: 600; }
+  .scale { display: flex; align-items: flex-end; gap: 6px; height: 58px; }
+  .scale div { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1;
+               font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .scale i { display: block; width: 100%; background: var(--aqua); border-radius: 2px; opacity: 0.85; }
+  .radii, .heights, .tiles { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .radii div, .heights div, .tiles div { display: flex; flex-direction: column; align-items: center;
+                                          gap: 5px; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .radii i { display: block; width: 44px; height: 44px; background: var(--well); border: 1px solid var(--hair-strong); }
+  .heights i { display: block; width: 74px; border-radius: 999px;
+               background: color-mix(in srgb, var(--aqua) 20%, transparent); border: 1px solid var(--aqua); }
+  .glyphs { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  .glyphs div { display: flex; flex-direction: column; align-items: center; gap: 5px;
+                font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .glyphs b { color: var(--ink); font-weight: 400; }
+
+  /* Type ramp */
+  .ramp { display: grid; grid-template-columns: 168px 1fr 232px; gap: 0 16px; align-items: baseline;
+          padding: 11px 0; border-bottom: 1px solid var(--hair); }
+  .ramp:last-child { border-bottom: 0; }
+  .ramp .role { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+  .ramp .role em { color: var(--aqua); font-style: normal; font-weight: 700; margin-left: 4px; }
+  .ramp .use { font-size: 12px; color: var(--ink-3); }
+  .ramp .sample { line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 760px) { .ramp { grid-template-columns: 1fr; gap: 4px; } }
+  .rnd { font-family: var(--rounded); }
+
+  ol.plan { padding-left: 22px; }
+  ol.plan li { margin: 7px 0; color: var(--ink-2); }
+  ol.plan li b { color: var(--ink); font-weight: 600; }
+  footer { margin-top: 68px; padding-top: 18px; border-top: 1px solid var(--hair);
+           color: var(--ink-3); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="mark" aria-hidden="true">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 12c3-5 7-7 12-7 2 0 4 .6 6 2l-2 5 2 5c-2 1.4-4 2-6 2-5 0-9-2-12-7zm12-2.5a1.2 1.2 0 100 2.4 1.2 1.2 0 000-2.4z"/>
+    </svg>
+  </div>
+  <h1>MacPleco 界面标准</h1>
+  <div class="meta">
+    <span>v2.0 · 2026-09-08</span>
+    <span>已全部实施</span>
+    <span>验收 21 / 21</span>
+    <span>正文见 docs/ui-standard.md</span>
+  </div>
+</header>
+
+<p class="lede">
+  这一页是标准的图解版：每个尺寸都按 1 像素 = 1 点画出来，所以档位之间的差别可以直接用眼睛核对，
+  而不用相信表格。规则本身、逐页清单和验收数字在同目录的 Markdown 里。
+</p>
+
+<p class="status">
+  <b>实施状态：</b>四档控件高度、共享基线的报头、意图驱动的动作语法、容器施加尺寸——全部落到代码里了。
+  §9 的 21 项验收数字用布局探针在 1200×800 中文窗口下全部量到。
+  实施过程中发现并修复了标准自己的一处对比度错误（见 06）。
+  规则由 <code>scripts/check-ui-standard.sh</code> 在 CI 第一步拦截。
+</p>
+
+<nav class="toc">
+  <a href="#s1">01 三个问题</a>
+  <a href="#s2">02 原则</a>
+  <a href="#s3">03 令牌</a>
+  <a href="#s4">04 文字角色</a>
+  <a href="#s5">05 动作语法</a>
+  <a href="#s6">06 对比度</a>
+  <a href="#s7">07 行与容器</a>
+  <a href="#s8">08 验收</a>
+</nav>
+
+<!-- 01 -->
+<section id="s1">
+  <h2><span class="n">01</span>三个问题，改前改后</h2>
+  <p>左边是 0.3.6 探针量到的现状，右边是现在。坐标以标题栏下缘为 0，单位 pt。</p>
+
+  <h3>其一 · 品牌与页面标题不在一条线上</h3>
+  <div class="spec">
+    <div class="pane">
+      <div class="cap"><span>0.3.6</span><span class="was">两列各用各的上边距</span></div>
+      <div class="stage" style="padding:0">
+        <div class="mock">
+          <div class="side">
+            <div class="brandrow" style="top:12px; left:20px;">
+              <span class="tile brand t32" style="width:30px;height:30px;border-radius:8px;font-size:14px;">🐟</span>
+              <span class="bt17">MacPleco</span>
+            </div>
+          </div>
+          <div class="main">
+            <div class="ptitle" style="top:24px;">概览</div>
+            <div class="psub" style="top:52px;">一眼看清这台 Mac</div>
+            <div class="ptrail" style="top:34px;"><span class="seg" style="height:24px;"><span class="on">已安装</span><span>开机启动</span></span></div>
+          </div>
+          <div class="guide a" style="top:27px;"><span class="lbl">品牌 27</span></div>
+          <div class="guide b" style="top:36px;"><span class="lbl" style="top:2px;">标题 36</span></div>
+        </div>
+      </div>
+      <div class="readout">
+        品牌文字中心 <b>79</b> · 标题中心 <b>88</b> · 差 <span class="bad">9pt</span><br>
+        插槽对齐的是 44 高双行块的中心 98，与两者都不齐<br>
+        品牌图标 x=20，导航项 x=24，两条左边线也不齐
+      </div>
+    </div>
+    <div class="pane">
+      <div class="cap"><span>现在</span><span class="is">一条 28 高的带子，一条基线</span></div>
+      <div class="stage" style="padding:0">
+        <div class="mock">
+          <div class="side">
+            <div class="brandrow" style="top:12px; left:24px;">
+              <span class="tile brand t28">🐟</span>
+              <span class="bt15">MacPleco</span>
+            </div>
+          </div>
+          <div class="main">
+            <div class="ptitle" style="top:16px;">概览</div>
+            <div class="psub" style="top:48px;">一眼看清这台 Mac</div>
+            <div class="ptrail" style="top:12px;"><span class="btn outline h28">↻ 重新扫描</span></div>
+          </div>
+          <div class="guide a" style="top:33px;"><span class="lbl">基线 33</span></div>
+        </div>
+      </div>
+      <div class="readout">
+        实测两者基线都是 <span class="good">85.0</span>（标题栏 52 + 33）<br>
+        对齐的是基线不是框：中文字身满格，两个字号框居中仍然不齐<br>
+        字标降为 <code>subhead</code> 15 + 次要色——页面的名字才是标题
+      </div>
+    </div>
+  </div>
+
+  <h3>其二 · 筛选行三个控件三种高度、三种字号</h3>
+  <div class="spec">
+    <div class="pane">
+      <div class="cap"><span>0.3.6</span><span class="was">31 / 24 / 24 · 12 / 13 / 11pt</span></div>
+      <div class="stage">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="search" style="height:31px; width:190px; padding:0 12px; font-size:12px;">⌕ 搜索应用</span>
+          <span class="pop" style="height:24px;">最久未用 <i>▲▼</i></span>
+          <span style="display:inline-flex; align-items:center; gap:8px; font-size:11px; color:var(--ink-2);">含系统自带 <span class="sw mini"></span></span>
+        </div>
+      </div>
+      <div class="readout">搜索 <b>260×31</b> · 下拉 <b>130×24</b> · 开关容器 <b>117×24</b>，本体 15<br>三种高度、三种字号，落在同一条水平线上</div>
+    </div>
+    <div class="pane">
+      <div class="cap"><span>现在</span><span class="is">FilterRow 施加 28 · 全部 13pt</span></div>
+      <div class="stage">
+        <div style="display:flex; align-items:center; gap:12px; height:28px;">
+          <span class="search" style="height:28px; width:190px; padding:0 12px;">⌕ 搜索应用</span>
+          <span class="pop" style="height:28px;">最久未用 <i>▲▼</i></span>
+          <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-2); height:28px;">含系统自带 <span class="sw small"></span></span>
+        </div>
+      </div>
+      <div class="readout">
+        行高 <b>28</b>，每个控件 <b>28</b>，标签一律 <code>body</code> 13<br>
+        控件不再接受尺寸参数——尺寸由行施加，页面写不出三种高度
+      </div>
+    </div>
+  </div>
+
+  <h3>其三 · 卸载所选比别处大</h3>
+  <div class="spec">
+    <div class="pane">
+      <div class="cap"><span>0.3.6</span><span class="was">44 高实心，页面最响</span></div>
+      <div class="stage">
+        <div class="bar" style="height:64px;">
+          <span class="cbox" style="width:17px;height:17px;border-radius:5px;"></span>
+          <span class="btn text">全选</span>
+          <span class="t11">已选 <b style="font-size:13px;color:var(--ink-3);">0</b> / 63</span>
+          <span class="grow"></span>
+          <span class="btn h44 off" style="background:linear-gradient(135deg,#E8908C,#D9736E);color:#fff;">🗑 卸载所选</span>
+        </div>
+        <div class="rowcard" style="height:56px;margin-top:8px;">
+          <span class="cbox" style="width:17px;height:17px;border-radius:5px;"></span>
+          <span class="appicon"></span>
+          <div><div class="t13s">BaiduNetdisk</div><div class="t11">8.7.0 · 3 个月前用过</div></div>
+          <span class="grow"></span><span class="rd">1.39 GB</span>
+          <span class="btn outline danger h36" style="border:0;background:none;">卸载</span>
+        </div>
+      </div>
+      <div class="readout">
+        与概览「开始清理」同为 <b>133×44</b> 实心；显得大是因为条里其它东西只有 11–13pt<br>
+        白字压 12% danger 玻璃 tint，对比度 <span class="bad">1.39:1</span>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="cap"><span>现在</span><span class="is">28 描边提议，确认时才实心</span></div>
+      <div class="stage">
+        <div class="bar" style="height:48px;">
+          <span class="cbox on"></span>
+          <span class="btn text">全选</span>
+          <span class="t11">已选 <b style="font-size:13px;color:var(--ink);">2</b> / 62 · <span class="rd" style="font-weight:400;color:var(--ink-2);">127 <u>MB</u></span></span>
+          <span class="grow"></span>
+          <span class="btn text quiet">清除</span>
+          <span class="btn outline danger h28">🗑 卸载所选 <span class="badge b-count dang">2</span></span>
+        </div>
+        <div class="rowcard" style="height:56px;margin-top:8px;">
+          <span class="cbox"></span>
+          <span class="appicon"></span>
+          <div><div class="t13s">BaiduNetdisk</div><div class="t11">8.7.0 · 3 个月前用过</div></div>
+          <span class="grow"></span><span class="rd">1.40 <u>GB</u></span>
+          <span class="icbtn">📁</span>
+          <span class="btn outline danger h24">卸载</span>
+        </div>
+      </div>
+      <div class="readout">
+        条高 <b>48</b> = 8 + 28 + 8 · 行内动作 <b>24</b> · 条内动作 <b>28</b><br>
+        描边 danger 对比度 <span class="good">4.53:1</span>，并多了「会删掉多少」的合计<br>
+        实心只留给确认界面，见 05
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 -->
+<section id="s2">
+  <h2><span class="n">02</span>原则</h2>
+  <p>六条，每条都能落成检查项。</p>
+  <div class="tbl-wrap">
+    <table>
+      <tr><th style="width:34px">#</th><th>原则</th><th>为什么</th></tr>
+      <tr><td class="num">1</td><td><b>容器定尺寸，页面不定。</b></td><td>一致性不来自令牌，来自容器。<code>SearchField</code> 已经是全 App 唯一实现，它照样比邻居高 7pt——因为没有东西规定它跟谁并排。</td></tr>
+      <tr><td class="num">2</td><td><b>一行一档，一行一字号。</b></td><td>同一条水平线上的控件必须同高、同字号。</td></tr>
+      <tr><td class="num">3</td><td><b>基线优先于框。</b></td><td>两段不同字号的中文要看起来在一条线上，对齐的是基线，不是框中心。</td></tr>
+      <tr><td class="num">4</td><td><b>响度对应后果。</b></td><td>越不可逆的动作，视觉越安静。最响的实心色块留给「让用户变好的那件事」。</td></tr>
+      <tr><td class="num">5</td><td><b>数字是内容。</b></td><td>这是一个量东西的 App。等宽数位、数值与单位分离、列右对齐、精度分档。</td></tr>
+      <tr><td class="num">6</td><td><b>可以量。</b></td><td>每条规则都有数字，改完用探针量，量不到就不算改完。</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 03 -->
+<section id="s3">
+  <h2><span class="n">03</span>令牌</h2>
+  <p>控件高度是这一版最关键的一组：四档，28 是主力。</p>
+
+  <div class="cards">
+    <div class="card">
+      <h4>Control · 四档高度</h4>
+      <div class="heights">
+        <div><i style="height:24px"></i>compact 24</div>
+        <div><i style="height:28px; border-width:2px"></i>standard 28</div>
+        <div><i style="height:36px"></i>emphasis 36</div>
+        <div><i style="height:44px"></i>hero 44</div>
+      </div>
+      <p class="note" style="margin:12px 0 0">
+        行内 24 · 默认 28 · 卡内主动作 36 · 每页最多一组 44。系统控件用
+        <code>controlSize</code> 对齐，<code>.large</code> = 28。
+      </p>
+    </div>
+    <div class="card">
+      <h4>为什么默认档是 28 而不是 24</h4>
+      <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+        <span class="btn outline" style="height:24px;padding:0 12px;font-size:13px;">开始清理</span>
+        <span class="btn outline" style="height:28px;padding:0 14px;font-size:13px;">开始清理</span>
+      </div>
+      <p class="note" style="margin:12px 0 0">
+        中文字身没有升降部，占满整个字高。13pt 中文在 24 高胶囊里上下各剩 5.5pt，视觉上顶边；
+        同样的胶囊放拉丁文字反而宽松。<b>控件内垂直余量的下限是 7pt。</b>
+      </p>
+    </div>
+    <div class="card">
+      <h4>Space · 4pt 网格，八级</h4>
+      <div class="scale">
+        <div><i style="height:2px"></i>2</div><div><i style="height:4px"></i>4</div>
+        <div><i style="height:8px"></i>8</div><div><i style="height:12px"></i>12</div>
+        <div><i style="height:16px"></i>16</div><div><i style="height:24px"></i>24</div>
+        <div><i style="height:32px"></i>32</div><div><i style="height:48px"></i>48</div>
+      </div>
+      <p class="note" style="margin:12px 0 0">块距 16 · 行距 8 · 栅格列距 12 · 内容列四周 32。禁止算术。</p>
+    </div>
+    <div class="card">
+      <h4>Radius · 六级</h4>
+      <div class="radii">
+        <div><i style="border-radius:22px"></i>panel 22</div>
+        <div><i style="border-radius:16px"></i>card 16</div>
+        <div><i style="border-radius:12px"></i>row 12</div>
+        <div><i style="border-radius:8px"></i>chip 8</div>
+        <div><i style="border-radius:4px"></i>control 4</div>
+        <div><i style="border-radius:999px"></i>pill</div>
+      </div>
+      <p class="note" style="margin:12px 0 0">同心律：子圆角 = 父圆角 − 父内边距（22 内缩 12 → 8）。</p>
+    </div>
+    <div class="card">
+      <h4>Glyph · 七级字形</h4>
+      <div class="glyphs">
+        <div><b style="font-size:9px">✦</b>badge 9</div>
+        <div><b style="font-size:11px">✦</b>caption 11</div>
+        <div><b style="font-size:13px">✦</b>control 13</div>
+        <div><b style="font-size:15px">✦</b>row 15</div>
+        <div><b style="font-size:17px">✦</b>card 17</div>
+        <div><b style="font-size:20px">✦</b>title 20</div>
+        <div><b style="font-size:30px">✦</b>feature 30</div>
+      </div>
+      <p class="note" style="margin:12px 0 0">图标尺寸不再借用字号阶梯。</p>
+    </div>
+    <div class="card">
+      <h4>IconBox · 尺寸与圆角成对</h4>
+      <div class="tiles">
+        <div><span class="tile t24">✦</span>24 / 6</div>
+        <div><span class="tile t28">✦</span>28 / 8</div>
+        <div><span class="tile t32">✦</span>32 / 8</div>
+        <div><span class="tile t44">✦</span>44 / 12</div>
+      </div>
+      <p class="note" style="margin:12px 0 0">
+        此前是五种尺寸配四种圆角、没有对应关系。收成四种后圆角 ≈ 盒宽 ÷ 3.6。
+      </p>
+    </div>
+  </div>
+
+  <h3>Motion · 六档，取代原来的十三种</h3>
+  <div class="tbl-wrap">
+    <table>
+      <tr><th>名</th><th class="num">曲线 · 时长</th><th>用途</th></tr>
+      <tr><td class="k">press</td><td class="num">snappy 0.16</td><td>按下</td></tr>
+      <tr><td class="k">hover</td><td class="num">smooth 0.20</td><td>悬停底、图标显隐</td></tr>
+      <tr><td class="k">state</td><td class="num">smooth 0.25</td><td>选中、展开、数值变化</td></tr>
+      <tr><td class="k">reveal</td><td class="num">smooth 0.30</td><td>结果行、横幅出现、页面切换</td></tr>
+      <tr><td class="k">settle</td><td class="num">smooth 0.50</td><td>图表与进度条随数据变化</td></tr>
+      <tr><td class="k">enter</td><td class="num">smooth 0.55 · 阶梯 0.06</td><td>页面入场</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 04 -->
+<section id="s4">
+  <h2><span class="n">04</span>文字角色</h2>
+  <p>
+    页面不能自己拼字号。<code>Typo.Step</code> 已收回 <code>Design/</code> 内部，
+    页面只能引用角色；CI 拦截 <code>.font(.system(size:</code>。中文的字重上限是 semibold，
+    <code>bold</code> 只给圆体数字和页面标题。下面按真实字号排列。
+  </p>
+  <div class="pane" style="padding:2px 16px;">
+    <div class="ramp"><span class="role">hero · 44 bold rounded</span>
+      <span class="sample rnd" style="font-size:44px;font-weight:700;">22.2<span style="font-size:17px;color:var(--ink-3);font-weight:600;margin-left:4px;">GB</span></span>
+      <span class="use">清理摘要、水位环读数。一页最多一个</span></div>
+    <div class="ramp"><span class="role">feature · 30 bold rounded</span>
+      <span class="sample rnd" style="font-size:30px;font-weight:700;">有 94.9 GB 可以回收</span>
+      <span class="use">概览标题句</span></div>
+    <div class="ramp"><span class="role">metric · 24 bold rounded</span>
+      <span class="sample rnd" style="font-size:24px;font-weight:700;">1.51<span style="font-size:17px;color:var(--ink-3);margin-left:4px;">TB</span></span>
+      <span class="use">统计卡的值。比页面标题大，故意的</span></div>
+    <div class="ramp"><span class="role">pageTitle · 20 bold rounded</span>
+      <span class="sample rnd" style="font-size:20px;font-weight:700;">概览</span>
+      <span class="use">页面标题，仅 Masthead</span></div>
+    <div class="ramp"><span class="role">cardTitle · 17 semibold rounded</span>
+      <span class="sample rnd" style="font-size:17px;font-weight:600;">永久删除这 338 项？</span>
+      <span class="use">Sheet 标题、空态标题</span></div>
+    <div class="ramp"><span class="role">subhead · 15 semibold</span>
+      <span class="sample" style="font-size:15px;font-weight:600;">应用缓存</span>
+      <span class="use">分组行标题、36/44 档按钮、品牌字标</span></div>
+    <div class="ramp"><span class="role">subheadNumeric · 15 <em>✚</em></span>
+      <span class="sample rnd" style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;">13.5 <span style="font-size:11px;color:var(--ink-3);font-weight:400;">GB</span></span>
+      <span class="use">类别合计、可用空间</span></div>
+    <div class="ramp"><span class="role">body · 13 regular</span>
+      <span class="sample" style="font-size:13px;">卸载应用，连同它留在别处的文件</span>
+      <span class="use">副标题、说明句、<b>所有 28 档控件文字</b></span></div>
+    <div class="ramp"><span class="role">bodyStrong · 13 semibold</span>
+      <span class="sample" style="font-size:13px;font-weight:600;">BaiduNetdisk</span>
+      <span class="use">标准行标题</span></div>
+    <div class="ramp"><span class="role">bodyNumeric · 13 <em>✚</em></span>
+      <span class="sample rnd" style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;">共释放 1.40 GB</span>
+      <span class="use">选择条计数、Sheet 页脚合计</span></div>
+    <div class="ramp"><span class="role">label · 12 medium</span>
+      <span class="sample" style="font-size:12px;font-weight:500;">全选 · 卸载 · WindowServer</span>
+      <span class="use">24 档按钮、文字按钮、紧凑行标题</span></div>
+    <div class="ramp"><span class="role">labelNumeric · 12</span>
+      <span class="sample rnd" style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;">202 <span style="font-size:11px;color:var(--ink-3);font-weight:400;">MB</span></span>
+      <span class="use">行内大小</span></div>
+    <div class="ramp"><span class="role">caption · 11 regular</span>
+      <span class="sample" style="font-size:11px;">5.5.1 · 3 个月前用过</span>
+      <span class="use">元数据、说明行、脚注、<b>单位</b></span></div>
+    <div class="ramp"><span class="role">captionNumeric · 11 <em>✚</em></span>
+      <span class="sample rnd" style="font-size:11px;font-variant-numeric:tabular-nums;">409 MB · 40.8%</span>
+      <span class="use">进程读数、份额、图例</span></div>
+    <div class="ramp"><span class="role">overline · 10 semibold</span>
+      <span class="sample" style="font-size:10px;font-weight:600;letter-spacing:0.06em;">最占资源的进程 · 随时可删</span>
+      <span class="use">区块标题、表头、徽章文字</span></div>
+    <div class="ramp"><span class="role">tag · 9 semibold <em>✚</em></span>
+      <span class="sample" style="font-size:9px;font-weight:600;">系统 · 建议之后重启一次相关应用</span>
+      <span class="use">紧凑徽章、结果行、警告行</span></div>
+    <div class="ramp"><span class="role">microMono · 9 mono</span>
+      <span class="sample" style="font-family:var(--mono);font-size:9px;">/System/Library/CoreServices/loginwindow.app</span>
+      <span class="use">路径、PID</span></div>
+  </div>
+  <p class="note" style="margin-top:14px">
+    数字一律用 <code>*Numeric</code> 角色加等宽数位；会变的数字加数字过渡动画。
+    <b>数值与单位分开排</b>：单位降到 <code>caption</code> 且用三级墨色——「4.31 GB」不是一个词，
+    是一个量和一把尺。切分只认已知单位，所以「M5 Max」和「5 小时 3 分」不会被拆（有测试覆盖）。
+  </p>
+</section>
+
+<!-- 05 -->
+<section id="s5">
+  <h2><span class="n">05</span>破坏性与可逆性的视觉语法</h2>
+  <p>
+    README 第一段承诺「破坏性按钮不是最显眼的那个」，而代码让它成了最显眼的那个。
+    加一个 <code>tint:</code> 参数修不好这件事，因为参数就是邀请。
+    现在调用方声明的是<b>意图</b>，形态与颜色由意图推导，<b>选不了颜色</b>。
+  </p>
+
+  <div class="tbl-wrap">
+    <table>
+      <tr><th>意图</th><th>形态</th><th style="width:220px">样例（真实尺寸）</th><th class="num">对比度</th></tr>
+      <tr>
+        <td class="k">go<br><span class="dim" style="font-size:11px">可逆 · 好事</span></td>
+        <td>实心 <code>goFill</code>，配 <code>onAccent</code>。<b>唯一能实心的意图</b></td>
+        <td><span class="btn filled h44">✦ 开始清理</span></td>
+        <td class="num good">4.64:1</td>
+      </tr>
+      <tr>
+        <td class="k">neutral<br><span class="dim" style="font-size:11px">无后果</span></td>
+        <td>玻璃胶囊 + 描边，<code>ink</code> 字</td>
+        <td><span class="btn outline h28">↻ 重新扫描</span></td>
+        <td class="num good">16.6:1</td>
+      </tr>
+      <tr>
+        <td class="k">reversible<br><span class="dim" style="font-size:11px">可逆的删除</span></td>
+        <td>描边，中性 <code>ink</code>。<b>不染红</b></td>
+        <td><span class="btn outline h24">移到废纸篓</span></td>
+        <td class="num good">16.6:1</td>
+      </tr>
+      <tr>
+        <td class="k">destructive<br><span class="dim" style="font-size:11px">不可逆 · 提议</span></td>
+        <td>描边 <code>danger</code> + 6% 底。列表与工具条里永不实心</td>
+        <td><span class="btn outline danger h28">🗑 卸载所选 <span class="badge b-count dang">2</span></span></td>
+        <td class="num good">4.53:1</td>
+      </tr>
+      <tr>
+        <td class="k">confirm<br><span class="dim" style="font-size:11px">不可逆 · 确认</span></td>
+        <td>实心 <code>dangerSolid</code>，白字。<b>仅确认界面</b></td>
+        <td><span class="btn confirm h28">永久删除</span></td>
+        <td class="num good">5.57:1</td>
+      </tr>
+    </table>
+  </div>
+
+  <h3>两条硬规则</h3>
+  <p class="note">
+    <b>其一 · 实心只给「可逆的好事」。</b>实心填充是页面上最响的东西，只用于让用户变好、且做错了能撤回的动作。
+    <b>其二 · 实心 <code>danger</code> 只活在确认里。</b>一个界面最多一个实心色块。
+    <code>.confirm</code> 画在没有 <code>confirmationSurface()</code> 标记的地方时，会退化成普通的描边破坏性按钮——
+    这不是约定，是类型系统里的事实。
+  </p>
+
+  <h3>可逆的删除不该染红</h3>
+  <p class="note">
+    「移到废纸篓」以前用的是 <code>danger</code>。<b>把可还原的动作染成红色，等于教用户忽略红色</b>——
+    真正不可逆的地方就没有词可用了。同理，它应该常显，不该藏在悬停里。
+  </p>
+
+  <h3>同一颗按钮，随后果改变形态</h3>
+  <div class="spec">
+    <div class="pane">
+      <div class="cap"><span>跳过废纸篓 · 关</span><span class="is">可逆 → hero 44 实心</span></div>
+      <div class="stage" style="display:flex;justify-content:center;">
+        <span class="btn filled h44">🗑 移到废纸篓 22.2 GB</span>
+      </div>
+      <div class="readout">点了就执行，因为一切都能从废纸篓放回原处</div>
+    </div>
+    <div class="pane">
+      <div class="cap"><span>跳过废纸篓 · 开</span><span class="was">不可逆 → emphasis 36 描边</span></div>
+      <div class="stage" style="display:flex;justify-content:center;">
+        <span class="btn outline danger h36">🚫 永久删除 22.2 GB</span>
+      </div>
+      <div class="readout">改文案、降一档、改描边，并且<b>不再直接执行</b>——先弹确认 Sheet</div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 -->
+<section id="s6">
+  <h2><span class="n">06</span>对比度：标准自己错了一处</h2>
+  <p>
+    标准 §4.2 写着「实心 <code>aquaSweep</code>，白字，白 / aqua = 4.9:1 ✓」。
+    用调色板里的实际色值算，这一行是错的——而且错得比它要修的问题还严重。
+  </p>
+  <div class="tbl-wrap">
+    <table>
+      <tr><th>组合</th><th class="num">实测</th><th>结果</th></tr>
+      <tr><td>白字 / <code>aquaBright</code> #11B3A4（浅色渐变起点）</td><td class="num bad">2.62:1</td><td class="dim">不达标</td></tr>
+      <tr><td>白字 / <code>aqua</code> #0B8F84（浅色中点）</td><td class="num bad">3.98:1</td><td class="dim">不达标</td></tr>
+      <tr><td>白字 / <code>aquaBright</code> #62F0DA（深色起点）</td><td class="num bad">1.40:1</td><td class="dim">几乎看不见</td></tr>
+      <tr><td class="dim">对照：白字 / 12% danger 玻璃 tint（被拿来当反面教材的那颗）</td><td class="num dim">1.39:1</td><td class="dim">—</td></tr>
+      <tr><td><b>白字 / <code>goFill</code> 浅色最差档</b></td><td class="num good">4.64:1</td><td class="good">达标</td></tr>
+      <tr><td><b>近黑 / <code>goFill</code> 深色最差档</b></td><td class="num good">5.68:1</td><td class="good">达标</td></tr>
+      <tr><td><b>白字 / <code>dangerSolid</code> 浅 #C0342F</b></td><td class="num good">5.57:1</td><td class="good">达标</td></tr>
+      <tr><td><b>白字 / <code>dangerSolid</code> 深 #8F2C28</b></td><td class="num good">8.21:1</td><td class="good">达标</td></tr>
+    </table>
+  </div>
+  <p class="note" style="margin-top:14px">
+    也就是说「开始清理」——全 App 最响、最该被看清的那颗按钮——比标准专门写来修的那颗还难读，深色下尤其糟。
+    <b>渐变承载不了文字。</b>
+  </p>
+
+  <h3>改法</h3>
+  <p class="note">
+    <code>aquaSweep</code> 降级为纯装饰（水位环、容量条、树图，都不承载文字），另立两个成对的令牌：
+    <code>goFill</code> 浅色走深、深色保持亮薄荷；<code>onAccent</code> 浅色白、深色近黑。
+    这一个前景色令牌覆盖全部强调色的场合——<b>这套调色板的所有强调色在浅色下都偏深、在深色下都偏亮</b>，
+    所以「压在强调色上的字」的颜色是跟着外观翻转的。
+  </p>
+  <div class="spec" style="margin-top:14px">
+    <div class="pane">
+      <div class="cap"><span>浅色</span><span class="is">深底 + 白字</span></div>
+      <div class="stage" style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+        <span class="btn h44" style="background:linear-gradient(135deg,#0A8378,#077268 55%,#055C54);color:#fff;">✦ 开始清理</span>
+        <span class="btn h44" style="background:linear-gradient(135deg,#11B3A4,#0B8F84 55%,#066A62);color:#fff;opacity:.55">✦ 旧：2.62:1</span>
+      </div>
+      <div class="readout">同一个动作，右边是 0.3.6 的画法</div>
+    </div>
+    <div class="pane">
+      <div class="cap"><span>深色</span><span class="is">亮底 + 近黑字</span></div>
+      <div class="stage" style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;background:#0A1626;">
+        <span class="btn h44" style="background:linear-gradient(135deg,#62F0DA,#38D9C4 55%,#1B9C93);color:#061018;">✦ 开始清理</span>
+        <span class="btn h44" style="background:linear-gradient(135deg,#62F0DA,#38D9C4 55%,#1B9C93);color:#fff;opacity:.75">✦ 旧：1.40:1</span>
+      </div>
+      <div class="readout">深色下保留品牌的亮薄荷，翻转的是字色</div>
+    </div>
+  </div>
+
+  <h3>玻璃控件的最小可辨度</h3>
+  <p class="note">
+    在浅色「深水」地上，<code>.ultraThinMaterial</code> 加 0.5pt 描边几乎看不出边界——
+    「看看有哪些」的边缘基本消失了。现在<b>任何可点的玻璃控件</b>都带一层足够不透明的填充加至少 16% 的描边，
+    macOS 26 与回退分支都画。非交互的玻璃面板可以更透。
+  </p>
+</section>
+
+<!-- 07 -->
+<section id="s7">
+  <h2><span class="n">07</span>行与容器</h2>
+  <p>行只有四种，没有第五种。真实尺寸：</p>
+
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div>
+      <div class="rowcard" style="height:56px;">
+        <span class="cbox on"></span><span class="appicon"></span>
+        <div><div class="t13s">MailMaster</div><div class="t11">5.5.1 · 3 个月前用过</div></div>
+        <span class="grow"></span>
+        <span class="rd" style="width:80px;text-align:right;">202 <u>MB</u></span>
+        <span class="icbtn">📁</span><span class="btn outline danger h24">卸载</span>
+      </div>
+      <div class="note" style="margin-top:5px;font-family:var(--mono);font-size:11px;">
+        <b>标准行卡 56</b>（带第二行路径 72）· r16 · 标题 bodyStrong · 动作 24 档
+      </div>
+    </div>
+    <div>
+      <div class="rowcard" style="height:64px;border-radius:22px;padding:0 16px;">
+        <span class="cbox on"></span><span class="tile t32">▣</span>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:15px;font-weight:600;line-height:19px;">应用缓存</span>
+            <span class="badge std b-aqua">✓ 随时可删</span><span class="badge std b-caut">29 项需留意</span>
+          </div>
+          <div class="t11">临时文件，应用下次打开会自动重建，可能稍慢一点。</div>
+        </div>
+        <span class="grow"></span>
+        <div style="text-align:right;">
+          <div class="rd" style="font-size:15px;">13.5 <u>GB</u></div>
+          <div class="t11" style="font-variant-numeric:tabular-nums;">262/291 项 · 共 51.6 GB</div>
+        </div>
+        <span class="icbtn" style="color:var(--ink-3)">›</span>
+      </div>
+      <div class="note" style="margin-top:5px;font-family:var(--mono);font-size:11px;">
+        <b>分组行头 64</b> · 卡 r22 · 标题 subhead 15 · 图标盒 32
+      </div>
+    </div>
+    <div>
+      <div class="bar" style="height:40px;border-radius:8px;padding:0 12px;background:transparent;border-color:transparent;">
+        <span class="cbox on"></span><span class="tile t24 b-neut" style="background:var(--well);color:var(--ink-3)">▤</span>
+        <div><div class="t12">Google Chrome 缓存</div><div class="t9m">~/Library/Caches/Google/Chrome</div></div>
+        <span class="grow"></span><span class="icbtn">📁</span>
+        <span class="rd" style="width:80px;text-align:right;font-weight:400;">4.02 <u>GB</u></span>
+      </div>
+      <div class="note" style="margin-top:5px;font-family:var(--mono);font-size:11px;">
+        <b>紧凑表格行 40</b> · 悬停底 r8 · 标题 label 12 · 路径 microMono 9 · 图标按钮
+      </div>
+    </div>
+    <div>
+      <div class="bar" style="height:48px;">
+        <span class="cbox on"></span><span class="btn text">全选</span>
+        <span class="t11">已选 <b style="font-size:13px;color:var(--ink);">3</b> / 8</span>
+        <span class="grow"></span><span class="btn text quiet">清除结果</span>
+        <span class="btn outline h28">▶ 执行选中项 <span class="badge b-count">3</span></span>
+      </div>
+      <div class="note" style="margin-top:5px;font-family:var(--mono);font-size:11px;">
+        <b>选择条 48</b>（纯文字条 40）· r12 · 上下 8 左右 12 · 动作 28 档
+      </div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:16px">
+    <b>行标题左边线 = 复选框 16 + 12 + 图标区 32 + 12 = 距行内边缘 72，全站一致。</b>
+    没有勾选的列表（开机项、大文件、前 12）补一个同宽的占位列——否则同一页两个页签之间标题会横跳 28。
+    数值列固定 80、动作区固定 96，都按中文量。骨架占位高度必须等于真实行高。
+  </p>
+
+  <h3>徽章：一个组件取代九种写法</h3>
+  <div class="pane"><div class="stage" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <span class="badge std b-aqua">✓ 随时可删</span>
+    <span class="badge std b-caut">👁 建议看一眼</span>
+    <span class="badge std b-dang">⚠ 请谨慎</span>
+    <span class="badge std b-caut">开机即启动</span>
+    <span class="badge std b-neut">系统自带</span>
+    <span class="badge std b-neut">下载</span>
+    <span class="badge cmp b-viol">系统</span>
+    <span class="badge std b-count">3</span>
+    <span class="badge std b-count dang">12</span>
+  </div>
+  <div class="readout">
+    标准档 <b>18</b> 高 · 紧凑档 <b>16</b> 高 · 两种样式：着色（tint 14% 底 + tint 字）与中性（井底 + 三级墨）<br>
+    此前是三种字号、四种内边距、三种字重、两种填充、两种形状，且都不表意
+  </div></div>
+</section>
+
+<!-- 08 -->
+<section id="s8">
+  <h2><span class="n">08</span>验收：21 / 21</h2>
+  <p>
+    用编进模块副本的布局探针量的，1200×800、中文、真实 <code>NSHostingView</code> 窗口。
+    坐标以窗口左上角为原点，单位 pt。
+  </p>
+  <div class="tbl-wrap">
+    <table>
+      <tr><th>测点</th><th class="num">目标</th><th class="num">实测</th><th class="num">结果</th></tr>
+      <tr><td>品牌字标基线 / 页面标题基线</td><td class="num">相等（52+33）</td><td class="num">85.0 / 85.0</td><td class="num good">通过</td></tr>
+      <tr><td>侧栏品牌 x / 导航项 x</td><td class="num">24 / 24</td><td class="num">24 / 24</td><td class="num good">通过</td></tr>
+      <tr><td>页面标题 x / 内容块 x</td><td class="num">284 / 284</td><td class="num">284 / 284</td><td class="num good">通过</td></tr>
+      <tr><td>报头插槽高（每一页）</td><td class="num">28</td><td class="num">28</td><td class="num good">通过</td></tr>
+      <tr><td>说明行高</td><td class="num">16</td><td class="num">16</td><td class="num good">通过</td></tr>
+      <tr><td>筛选行高 / 其中每个控件</td><td class="num">28 / 28</td><td class="num">28 / 28</td><td class="num good">通过</td></tr>
+      <tr><td>页签高</td><td class="num">28</td><td class="num">28</td><td class="num good">通过</td></tr>
+      <tr><td>选择条高 / 其中按钮</td><td class="num">48 / 28</td><td class="num">48 / 28</td><td class="num good">通过</td></tr>
+      <tr><td>面包屑（纯文字条）</td><td class="num">40</td><td class="num">40</td><td class="num good">通过</td></tr>
+      <tr><td>标准行卡 / 带警告</td><td class="num">56 / 72</td><td class="num">56 / 72</td><td class="num good">通过</td></tr>
+      <tr><td>紧凑表格行 / 分组行头</td><td class="num">40 / 64</td><td class="num">40 / 64</td><td class="num good">通过</td></tr>
+      <tr><td>行标题左边线（距行内边缘）</td><td class="num">72</td><td class="num">72</td><td class="num good">通过</td></tr>
+      <tr><td>徽章高（标准 / 紧凑）· 复选框</td><td class="num">18 / 16 · 16</td><td class="num">18 / 16 · 16</td><td class="num good">通过</td></tr>
+      <tr><td>图标按钮命中区</td><td class="num">24</td><td class="num">24</td><td class="num good">通过</td></tr>
+      <tr><td>页内实心色块</td><td class="num">≤ 1</td><td class="num">概览 1 · 清理 1 · 其余 0</td><td class="num good">通过</td></tr>
+      <tr><td><b>实心 danger 出现次数（主窗口）</b></td><td class="num"><b>0</b></td><td class="num"><b>0</b></td><td class="num good">通过</td></tr>
+      <tr><td>破坏性按钮档位</td><td class="num">≤ 36</td><td class="num">24 / 28</td><td class="num good">通过</td></tr>
+      <tr><td>CI 拦截规则</td><td class="num">0 命中</td><td class="num">0</td><td class="num good">通过</td></tr>
+    </table>
+  </div>
+
+  <h3>两处第一轮没量对，改了</h3>
+  <ol class="plan">
+    <li><b>侧栏品牌 x = 32，不是 24。</b>侧栏面板本身被系统内缩了 8，所以 24 的内边距把品牌推到了 32，而导航项在 24。改成 16。</li>
+    <li><b>行标题左边线 = 80，不是 72。</b>复选框的命中区是 24 宽，把后面所有东西推了 8。改成横向 16（纵向仍是一个控件档）。</li>
+  </ol>
+
+  <h3>已知偏差</h3>
+  <p class="note">
+    紧凑表格行用 8pt 内缩的自有几何，不遵守 72 的标题左边线（标准里本就分开定义）。
+    默认 1200 窗口下四张统计卡仍是 2×2，这是网格的既定行为。
+    这台机器无法截图核对像素，视觉部分靠两条可计算的证据：探针量出的几何，和上面算出的对比度。
+  </p>
+</section>
+
+<footer>
+  MacPleco 界面标准 v2.0 · 规则正文、逐页套用清单与探针方法见同目录的
+  <a href="ui-standard.md">ui-standard.md</a> ·
+  拦截规则见 <code>scripts/check-ui-standard.sh</code> ·
+  本页所有尺寸按 1 像素 = 1 点绘制，可直接用截图比对
+</footer>
+
+</div>
+</body>
+</html>
